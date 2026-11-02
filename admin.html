@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
-<title>PK team results</title>
+<title>NHETE team results</title>
 <link rel="stylesheet" href="app.css">
 <style>
 .shell { max-width: 980px; }
@@ -24,11 +24,11 @@ button.danger { background: var(--warn-bg); color: var(--warn-ink); border-color
 </head>
 <body>
 <div class="shell">
-  <header class="nav"><div class="brand"><i>P</i><span>PK team results</span></div><button class="btn ghost" id="signout" style="min-height:36px;padding:4px 16px" hidden>Sign out</button></header>
+  <header class="nav"><div class="brand"><i>N</i><span>NHETE team results</span></div><button class="btn ghost" id="signout" style="min-height:36px;padding:4px 16px" hidden>Sign out</button></header>
 
   <section id="login" class="card" style="margin-top:22px;max-width:520px">
     <h2>Sign in</h2>
-    <p class="hint">For the PK team only. Accounts are created by the project owner.</p>
+    <p class="hint">For the NHETE team only. Accounts are created by the project owner.</p>
     <label class="f" for="em">Email</label><input id="em" type="text" autocomplete="username">
     <label class="f" for="pw">Password</label><input id="pw" type="password" autocomplete="current-password">
     <div class="row"><button class="btn" id="go">Sign in</button></div>
@@ -174,7 +174,7 @@ async function refresh() {
 }
 $("ref").onclick = refresh; $("inctest1").onchange = refresh;
 /* The list of questions comes from the content that is live for the chosen form. Open-text questions are left out. */
-const CLOSED = ["single", "scale", "multi", "rank", "matrix"];
+const CLOSED = ["single", "scale", "multi", "rank", "matrix", "grid"];
 const plain = (s) => String(s || "").replace(/\*\*/g, "").replace(/\{\{|\}\}/g, "").replace(/\s+/g, " ").trim();
 async function loadQuestions() {
   const sel = $("itemsel"), form = $("form").value; sel.innerHTML = ""; $("itemout").innerHTML = "";
@@ -245,7 +245,7 @@ $("dl").onclick = async () => {
     rows.forEach((r) => lines.push([r.session_id, r.form, r.attendance, label[r.code_id], r.status, r.started_at, r.updated_at, r.completed_at, r.profile].concat(ak.map((k) => (r.answers || {})[k])).map(csvCell).join(",")));
     const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = "PK-pre-work-responses-" + new Date().toISOString().slice(0, 10) + ".csv"; document.body.appendChild(a); a.click(); a.remove();
+    a.download = "NHETE-pre-work-responses-" + new Date().toISOString().slice(0, 10) + ".csv"; document.body.appendChild(a); a.click(); a.remove();
     msg(out, "Downloaded " + rows.length + " responses. This file is confidential.", "ok");
   } catch (e) { msg(out, "Could not export: " + e.message, "err"); }
 };
@@ -292,7 +292,7 @@ function validateOne(c, holder) {
     const have = (q.options || []).map((o) => (typeof o === "string" ? o : o.v));
     (q.exclusive || []).forEach((v) => { if (have.indexOf(v) < 0) errs.push("Question " + k + ": the exclusive choice \"" + v + "\" is not one of its options."); });
     if (q.type === "multi" && !(q.exclusive || []).length && have.some((v) => /^(none of|nothing|don't know|i have no idea)/i.test(v))) errs.push("Question " + k + " has a \"none\" or \"don't know\" choice but no exclusive rule.");
-    if (["open", "perGroup", "condText", "text"].indexOf(q.type) >= 0 && q.maxWords !== 1500) errs.push("Question " + k + " does not have the 1,500-word limit.");
+    if (["open", "perGroup", "condText", "text", "grid"].indexOf(q.type) >= 0 && q.maxWords !== 1500) errs.push("Question " + k + " does not have the 1,500-word limit.");
     if (q.routeForm) Object.keys(q.routeForm).forEach((v) => { if (have.indexOf(v) < 0) errs.push("Question " + k + ": the routing choice \"" + v + "\" is not one of its options."); });
   });
   if (!finals) errs.push("The file has no final (thank-you) screen.");

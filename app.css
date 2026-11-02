@@ -192,3 +192,56 @@ details details summary { font-weight: 600; font-size: 16px; }
   .dbl-plot { margin: 0 36px; }
   .dbl-d { display: flex; gap: 10px; align-items: baseline; }
 }
+
+/* ---- NHETE module additions ---- */
+.save { white-space: normal; max-width: min(60vw, 520px); text-align: right; line-height: 1.3; }
+#gloss .gd + .gd { margin-top: 8px; }
+ul.plain.nobullet { list-style: none; padding-left: 0; }
+.help.small { font-size: 14px; margin: -6px 0 18px; }
+.formula { font-family: ui-monospace, Consolas, monospace; font-size: 15px; background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; overflow-wrap: anywhere; }
+blockquote.example { font-style: normal; }
+.advice { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 12px; padding: 12px 16px; margin: 0 0 30px; }
+.advice .k { font-size: 13px; font-weight: 700; color: var(--muted); margin: 0 0 4px; }
+.advice p:last-child { margin: 0; }
+button.btn.notours { min-height: 44px; }
+button.btn.notours.on { background: var(--warn-bg); color: var(--warn-ink); border-color: var(--warn-ink); }
+.xq { margin: 0 0 36px; }
+/* research panel */
+details.research { margin: 22px 0; }
+details.research .ev { border-top: 1px solid var(--line); padding: 10px 0 2px; }
+details.research .ev p { margin: 0 0 8px; font-size: 16px; }
+details.research .evh { display: flex; flex-wrap: wrap; gap: 6px; }
+details.research .chip { margin: 0; }
+.chip.sup { background: var(--ok-bg); color: var(--ok-ink); }
+.chip.cau { background: var(--warn-bg); color: var(--warn-ink); }
+.chip.arg { background: var(--err-bg); color: var(--err-ink); }
+.chip.ty, .chip.acc { background: var(--grey-bg); color: var(--grey-ink); }
+/* flow diagram and levels table */
+.flow { display: flex; flex-direction: column; align-items: stretch; gap: 6px; margin: 22px 0; }
+.flow .fstep { border: 1px solid var(--line); background: var(--accent-soft); border-radius: 14px; padding: 12px 16px; }
+.flow .fstep ul { margin: 6px 0 0; padding-left: 20px; }
+.flow .arrow { text-align: center; font-size: 22px; color: var(--muted); line-height: 1; }
+.cmp.lv table { min-width: 0; width: 100%; }
+/* grids: one row per item */
+.gridwrap { overflow-x: auto; }
+table.gridq { border-collapse: collapse; width: 100%; font-size: 15px; }
+table.gridq th, table.gridq td { border: 1px solid var(--line); padding: 8px 10px; vertical-align: top; text-align: left; }
+table.gridq thead th { background: var(--soft); font-weight: 600; }
+table.gridq th.gv, table.gridq td.gv { text-align: center; width: 92px; }
+table.gridq td.gv label { display: block; cursor: pointer; border-radius: 10px; padding: 6px 2px; }
+table.gridq td.gv label.sel { background: var(--accent-soft); }
+table.gridq td.gv input { width: 20px; height: 20px; accent-color: var(--primary); }
+table.gridq td.gv label span { display: none; }
+table.gridq td.gv label:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+table.gridq tr.gcm td { background: var(--soft); }
+table.gridq tr.gcm textarea { margin-top: 6px; }
+@media (max-width: 899px) {
+  table.gridq thead { position: absolute; left: -9999px; }
+  table.gridq, table.gridq tbody, table.gridq tr, table.gridq td { display: block; width: 100%; }
+  table.gridq tr.grow { border: 1px solid var(--line); border-radius: 14px; margin-bottom: 4px; overflow: hidden; }
+  table.gridq td { border: 0; padding: 6px 12px; }
+  table.gridq td.gv { text-align: left; width: auto; padding: 0 8px; }
+  table.gridq td.gv label { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 4px; }
+  table.gridq td.gv label span { display: inline; }
+  table.gridq tr.gcm { margin-bottom: 12px; }
+}
