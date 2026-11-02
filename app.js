@@ -5,7 +5,7 @@
   var $ = function (id) { return document.getElementById(id); };
   var UI0 = {
     back: "Back", next: "Continue", finish: "Finish", pleaseAnswer: "Please answer the questions above to continue.",
-    saved: "Saved", savedLocal: "Saved here. Will send later.", sending: "Saving...", notSaved: "Not saved. Tell the PK team.",
+    saved: "Saved", savedLocal: "Saved here. Will send later.", sending: "Saving...", notSaved: "Not saved. Tell the NHETE team.",
     stopOf: "Stop {n} of {total}", otherSpecify: "Please describe", words: "words", resumeTitle: "Welcome back",
     resumeText: "You started this form on this device. Would you like to carry on where you stopped?",
     resumeYes: "Carry on", resumeNo: "Start again", doneTitle: "Thank you",
@@ -16,9 +16,17 @@
     internalDoc: "Internal DOH document", submit: "Submit", submitting: "Submitting...",
     exclusiveHint: "Choosing {x} clears your other choices.", orWord: "or", backToStart: "Back to the first question",
     tableShow: "Show the numbers as a table",
-    submitFail: "Your answers could not be sent yet. They are saved on this device. Please check your connection and press Submit again."
+    submitFail: "Your answers could not be sent yet. They are saved on this device. Please check your connection and press Submit again.",
+    maxHint: "You can choose up to two.", submittedMsg: "Your answers have been submitted.",
+    changeDevice: "Using a different device? Your answers are saved only on the device where you started. To carry on, please go back to that device. You can also start again from the beginning on this device.",
+    advBtn: "Show our advice", advLabel: "Our advice. It is only advice, and you are free to disagree.",
+    resTitle: "Research behind this", resHelp: "Optional reading. Each entry says whether the paper supports the indicator, urges caution, or argues against it. The panel is collapsed by default and opens only when the respondent taps it.",
+    stance: { "Supports": "Supports", "Cautions": "Cautions", "Argues against": "Argues against" },
+    rtype: { "Research study": "Research study", "WHO or official standard": "WHO or official standard", "Philippine law or DOH rule": "Philippine law or DOH rule", "Our reasoning": "Our reasoning" },
+    resLink: "Read the paper (opens in a new tab)", accFree: "Free to read", accSub: "May need a subscription",
+    resFoot: "We checked that each link opens the paper it names. The summaries are ours and are in plain words, so please read the paper for the full detail."
   };
-  var S = { code: null, hash: null, forms: [], form: null, content: null, variants: null, lang: null, session: null, answers: {}, order: {}, pos: null, furthest: 0, completed: false, queue: [] };
+  var S = { shown: {}, open: {}, seen: {}, rk: 0, code: null, hash: null, forms: [], form: null, content: null, variants: null, lang: null, session: null, answers: {}, order: {}, pos: null, furthest: 0, completed: false, queue: [] };
   var UI = UI0;
 
   // ---------- helpers ----------
@@ -40,7 +48,26 @@
     }
     return e;
   }
-  function rich(text) {
+  // rich text: **bold**, {{glossary word}} and [link](https://...). With auto = true, the first appearance on a screen
+  // of each word in content.autoGloss is also marked as a glossary word (the module text allows this).
+  function termBtn(key, shown) { return el("button", { type: "button", class: "term", "data-term": key, text: shown || key }); }
+  function autoMark(frag, str) {
+    var list = (S.content && S.content.autoGloss) || [], g = S.content && S.content.glossary, rest = str;
+    if (!list.length || !g) { frag.appendChild(document.createTextNode(str)); return; }
+    while (rest) {
+      var best = null;
+      for (var n = 0; n < list.length; n++) {
+        var it = list[n]; if (!g[it[0]] || S.seen[g[it[0]]]) continue;
+        var m = new RegExp(it[1]).exec(rest);
+        if (m && (!best || m.index < best.m.index)) best = { it: it, m: m };
+      }
+      if (!best) { frag.appendChild(document.createTextNode(rest)); return; }
+      if (best.m.index) frag.appendChild(document.createTextNode(rest.slice(0, best.m.index)));
+      frag.appendChild(termBtn(best.it[0], best.m[0])); S.seen[g[best.it[0]]] = true;
+      rest = rest.slice(best.m.index + best.m[0].length);
+    }
+  }
+  function rich(text, auto) {
     var frag = document.createDocumentFragment();
     String(text == null ? "" : text).split(/(\*\*.+?\*\*|\{\{.+?\}\}|\[[^\]]+\]\(https?:\/\/[^)\s]+\))/g).forEach(function (part) {
       if (!part) return;
@@ -50,12 +77,14 @@
       else if (part.slice(0, 2) === "{{") {
         var key = part.slice(2, -2).trim();
         var g = S.content && S.content.glossary;
-        if (g && g[key]) frag.appendChild(el("button", { type: "button", class: "term", "data-term": key, text: key }));
+        if (g && g[key]) { frag.appendChild(termBtn(key)); S.seen[g[key]] = true; }
         else frag.appendChild(document.createTextNode(key));
-      } else frag.appendChild(document.createTextNode(part));
+      } else if (auto) autoMark(frag, part);
+      else frag.appendChild(document.createTextNode(part));
     });
     return frag;
   }
+  function plainText(t) { return String(t == null ? "" : t).replace(/\*\*/g, "").replace(/\{\{(.+?)\}\}/g, function (m, k) { return k.trim(); }); }
   function store(k, v) { try { if (v === undefined) localStorage.removeItem(k); else localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   function load(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }
   function sha(text) {
@@ -96,7 +125,7 @@
     var g = $("gloss"), k = b.getAttribute("data-term");
     g.innerHTML = ""; g.setAttribute("aria-label", k);
     g.appendChild(el("button", { type: "button", class: "gx", id: "glx", "aria-label": "Close", text: "×" }));
-    g.appendChild(el("b", { text: k })); g.appendChild(el("span", { class: "gd", text: S.content.glossary[k] }));
+    g.appendChild(el("b", { text: k })); String(S.content.glossary[k]).split("\n\n").forEach(function (para) { g.appendChild(el("span", { class: "gd", text: para })); });
     g.style.left = "0px"; g.style.top = "0px"; g.classList.remove("up"); g.classList.add("on");
     var rects = b.getClientRects(), r = rects[0];
     for (var i = 0; i < rects.length; i++) if (ev && ev.clientX >= rects[i].left && ev.clientX <= rects[i].right && ev.clientY >= rects[i].top && ev.clientY <= rects[i].bottom) r = rects[i];
@@ -122,7 +151,9 @@
   // ---------- conditions ----------
   function cond(c) {
     if (!c) return true;
+    if (c.and) return c.and.every(cond);
     var v = S.answers[c.q];
+    if (c.not) return !v || (Array.isArray(v) && !v.length);
     if (c.answered) return v != null && v !== "" && !(Array.isArray(v) && !v.length);
     if (c.in) return Array.isArray(v) ? v.some(function (x) { return c.in.indexOf(x) >= 0; }) : c.in.indexOf(v) >= 0;
     if (c.notIn) return v != null && v !== "" && c.notIn.indexOf(v) < 0;
@@ -163,6 +194,7 @@
     return S.order[id].map(function (i) { return items[i]; });
   }
   function setAns(id, v) { S.answers[id] = v; persist(); }
+  function helpEls(h) { return h ? [].concat(h).map(function (x) { return el("p", { class: "help" }, rich(x, true)); }) : null; }
   function qLabel(id, q) {
     return el("div", { class: "t" }, el("span", { class: "qno", text: id }), rich(q.label));
   }
@@ -178,7 +210,7 @@
         if (q.other) for (var i = 0; i < q.other.length; i++) if (v.indexOf(q.other[i]) >= 0 && !(S.answers[id + "_text"] || "").trim()) return false;
         return true;
       case "rank": return Array.isArray(v) && v.length === (q.pick || optList(q).length);
-      case "matrix": return !!v && q.rows.every(function (r) { return v[r.key]; });
+      case "matrix": case "grid": return !!v && q.rows.every(function (r) { return v[r.key]; });
       case "text": case "open": return (v || "").trim() !== "";
       default: return true;
     }
@@ -209,7 +241,7 @@
     // a list built from an earlier answer: drop an answer that is no longer on the list
     if (q.optionsOf && cur != null && !opts.some(function (o) { return o.v === cur; })) { delete S.answers[id]; cur = undefined; persist(); }
     var seg = q.type === "scale";
-    var wrap = el("div", { class: "q", role: "radiogroup" }, qLabel(id, q), q.help ? el("p", { class: "help" }, rich(q.help)) : null);
+    var wrap = el("div", { class: "q", role: "radiogroup" }, qLabel(id, q), helpEls(q.help));
     var box = el("div", { class: seg ? "seg" : "" });
     opts.forEach(function (o) {
       var inp = el("input", { type: "radio", name: id, value: o.v, "data-k": id + "|" + o.v, checked: cur === o.v,
@@ -233,7 +265,7 @@
       var names = ex.map(function (v) { var o = opts.filter(function (x) { return x.v === v; })[0]; return "“" + (o ? o.l : v) + "”"; });
       hint = el("p", { class: "help ex-hint", text: T("exclusiveHint", { x: names.join(" " + T("orWord") + " ") }) });
     }
-    var wrap = el("div", { class: "q" }, qLabel(id, q), q.help ? el("p", { class: "help" }, rich(q.help)) : null, hint);
+    var wrap = el("div", { class: "q" }, qLabel(id, q), helpEls(q.help), hint, q.max && q.maxHint ? el("p", { class: "help ex-hint", text: T("maxHint") }) : null);
     var full = q.max && cur.length >= q.max;
     opts.forEach(function (o) {
       var on = cur.indexOf(o.v) >= 0, isEx = ex.indexOf(o.v) >= 0, off = !on && (exOn != null || (full && !isEx));
@@ -253,7 +285,7 @@
   function qRank(id, q) {
     var cur = S.answers[id] || [], opts = optList(q), pick = q.pick || opts.length;
     if (q.shuffle) opts = shuffled(id, opts, q.fixedLast || 0);
-    var wrap = el("div", { class: "q" }, qLabel(id, q), q.help ? el("p", { class: "help" }, rich(q.help)) : null);
+    var wrap = el("div", { class: "q" }, qLabel(id, q), helpEls(q.help));
     var list = el("div", { class: "rank" });
     opts.forEach(function (o) {
       var pos = cur.indexOf(o.v);
@@ -273,7 +305,7 @@
     var cur = S.answers[id] || {};
     var rows = q.rows.slice();
     if (q.shuffleRows) rows = shuffled(id, rows, 0);
-    var wrap = el("div", { class: "q" }, qLabel(id, q), q.help ? el("p", { class: "help" }, rich(q.help)) : null);
+    var wrap = el("div", { class: "q" }, qLabel(id, q), helpEls(q.help));
     if (q.scaleNote) wrap.appendChild(el("div", { class: "scale-note" }, el("span", { text: q.scaleNote[0] }), el("span", { text: q.scaleNote[1] })));
     rows.forEach(function (r) {
       if (q.display === "stars") { wrap.appendChild(starRow(id, q, r, cur)); return; }
@@ -306,6 +338,39 @@
     });
     return el("div", { class: "rate" }, el("div", { class: "name" }, rich(r.label)), grp);
   }
+  // A grid: one row per item (a part of the Terms of Reference, a ground rule, a red flag), one choice per row.
+  // The comment box of a row opens only when the answer is one of q.commentWhen.
+  function qGrid(id, q) {
+    var cur = S.answers[id] || {}, cm = S.answers[id + "_c"] || {};
+    var vals = q.values.map(function (v) { return typeof v === "string" ? { v: v, l: v } : { v: v.v, l: v.l || v.v }; });
+    var heads = (q.heads || []).map(function (h) { return String(h).replace(/\s*\(.*$/, ""); });
+    var titled = q.rows.some(function (r) { return r.title; });
+    var tr0 = el("tr", {}, el("th", { scope: "col", text: heads[0] || "" }), titled ? el("th", { scope: "col", text: heads[1] || "" }) : null,
+      vals.map(function (v) { return el("th", { scope: "col", class: "gv", text: v.l }); }));
+    var tb = el("tbody");
+    q.rows.forEach(function (r) {
+      var chosen = cur[r.key], name = id + "_" + r.key;
+      var row = el("tr", { class: "grow" },
+        titled ? el("td", { class: "rt" }, el("b", {}, rich(r.title))) : null,
+        el("td", { class: "rx" }, rich(r.text, true)),
+        vals.map(function (v) {
+          var inp = el("input", { type: "radio", name: name, value: v.v, "data-k": name + "|" + v.v, checked: chosen === v.v,
+            onchange: function () { var o = Object.assign({}, S.answers[id] || {}); o[r.key] = v.v; setAns(id, o); redraw(name + "|" + v.v); } });
+          return el("td", { class: "gv", "data-label": v.l }, el("label", { class: chosen === v.v ? "sel" : "" }, inp, el("span", { text: v.l })));
+        }));
+      tb.appendChild(row);
+      if (q.commentWhen && q.commentWhen.indexOf(chosen) >= 0) {
+        var max = q.maxWords || MAXW, counter = el("div", { class: "counter" }), tid = "gc_" + id + "_" + r.key;
+        var upd = function (val) { counter.textContent = wc(val) + " / " + max + " " + UI.words; counter.className = "counter" + (wc(val) > max ? " over" : ""); };
+        var ta = el("textarea", { id: tid, rows: "3", "aria-label": q.comment, oninput: function () {
+          var o = Object.assign({}, S.answers[id + "_c"] || {}); o[r.key] = ta.value; setAns(id + "_c", o); upd(ta.value); updateNav(); } });
+        ta.value = cm[r.key] || ""; upd(ta.value);
+        tb.appendChild(el("tr", { class: "gcm" }, el("td", { colspan: String(vals.length + (titled ? 2 : 1)) },
+          el("label", { class: "t", for: tid, style: "font-weight:500", text: q.comment }), ta, counter)));
+      }
+    });
+    return el("div", { class: "q" }, qLabel(id, q), el("div", { class: "gridwrap" }, el("table", { class: "gridq" }, el("thead", {}, tr0), tb)));
+  }
   function textarea(id, label, max, help, unit, key) {
     var v = key ? ((S.answers[id] || {})[key] || "") : (S.answers[id] || "");
     var counter = el("div", { class: "counter" });
@@ -323,7 +388,7 @@
   }
   function qText(id, q) {
     var inp = el("input", { type: "text", id: "s_" + id, value: S.answers[id] || "", placeholder: q.placeholder || "", oninput: function () { setAns(id, inp.value); updateNav(); } });
-    return el("div", { class: "q" }, el("label", { class: "t", for: "s_" + id }, el("span", { class: "qno", text: id }), rich(q.label)), q.help ? el("p", { class: "help" }, rich(q.help)) : null, inp);
+    return el("div", { class: "q" }, el("label", { class: "t", for: "s_" + id }, el("span", { class: "qno", text: id }), rich(q.label)), helpEls(q.help), inp);
   }
   function qPerGroup(id, q) {
     var picked = (S.answers[q.source] || []).filter(function (x) { return (q.exclude || []).indexOf(x) < 0 && !(q.other && q.other.indexOf(x) >= 0 && false); });
@@ -356,6 +421,7 @@
       case "multi": return qMulti(id, q);
       case "rank": return qRank(id, q);
       case "matrix": return qMatrix(id, q);
+      case "grid": return qGrid(id, q);
       case "open": return qOpen(id, q);
       case "text": return qText(id, q);
       case "perGroup": return qPerGroup(id, q);
@@ -367,6 +433,7 @@
     out = out || [];
     (blocks || []).forEach(function (b) {
       if (b.t === "q") { var q = S.content.questions[b.id]; if (q && (!q.showIf || cond(q.showIf))) out.push(b.id); }
+      if (b.t === "notours") out.push(b.id);
       if (b.t === "details" || b.t === "card") screenQuestions(b.blocks, out);
     });
     return out;
@@ -378,6 +445,7 @@
     if (!mx) return 0;
     if ((q.type === "open" || q.type === "text") && wc(v) > mx) return mx;
     if ((q.type === "perGroup" || q.type === "condText") && v && Object.keys(v).some(function (k) { return wc(v[k]) > mx; })) return mx;
+    if (q.type === "grid") { var c = S.answers[id + "_c"] || {}; if (Object.keys(c).some(function (k) { return wc(c[k]) > mx; })) return mx; }
     return 0;
   }
   function overLimit(id, q) { return overBy(id, q) > 0; }
@@ -397,6 +465,51 @@
   }
 
   // ---------- blocks ----------
+  // "Research behind this": a panel that is collapsed until the respondent opens it. It never holds up an answer.
+  function research(b) {
+    var key = S.pos + ":" + (S.rk++);
+    var det = el("details", { class: "research", open: !!S.open[key], ontoggle: function () { S.open[key] = det.open; } },
+      el("summary", { text: T("resTitle") }), el("p", { class: "help", text: T("resHelp") }));
+    var st = UI.stance || {}, ty = UI.rtype || {}, cls = { "Supports": "sup", "Cautions": "cau", "Argues against": "arg" };
+    b.items.forEach(function (e) {
+      det.appendChild(el("div", { class: "ev" },
+        el("p", { class: "evh" }, el("span", { class: "chip " + (cls[e.stance] || ""), text: st[e.stance] || e.stance }), el("span", { class: "chip ty", text: ty[e.type] || e.type }),
+          e.access ? el("span", { class: "chip acc", text: e.access === "sub" ? T("accSub") : T("accFree") }) : null),
+        el("p", {}, rich(e.text)),
+        e.url ? el("p", {}, el("a", { class: "doi", href: e.url, target: "_blank", rel: "noopener noreferrer", text: T("resLink") })) : null));
+    });
+    det.appendChild(el("p", { class: "help", text: T("resFoot") }));
+    return det;
+  }
+  // The two steps of NHETE as a simple flow (steps and outcomes come from the content).
+  function flowDiagram(b) {
+    var kids = [];
+    (b.steps || []).forEach(function (st, i) {
+      if (i) kids.push(el("div", { class: "arrow", "aria-hidden": "true", text: "↓" }));
+      kids.push(el("div", { class: "fstep" }, el("b", { text: st.title }), el("ul", {}, st.outcomes.map(function (o) { return el("li", { text: o }); }))));
+    });
+    return el("div", { class: "flow", role: "group" }, kids);
+  }
+  function levelsTable(b) {
+    return el("div", { class: "cmp lv" }, el("table", {}, el("thead", {}, el("tr", {}, (b.heads || []).map(function (h) { return el("th", { text: h }); }))),
+      el("tbody", {}, (b.rows || []).map(function (r) { return el("tr", {}, r.map(function (c) { return el("td", { text: c }); })); }))));
+  }
+  // Our advice appears only after the person has answered, and only when they ask for it.
+  function advice(b) {
+    var a = S.answers[b.q];
+    if (a == null || a === "" || (Array.isArray(a) && !a.length)) return null;
+    var key = "adv_" + b.q;
+    if (!S.shown[key]) return el("div", { class: "q" }, el("button", { type: "button", class: "btn ghost", text: T("advBtn"), onclick: function () { S.shown[key] = true; persist(); redraw(); } }));
+    return el("div", { class: "advice" }, el("p", { class: "k", text: T("advLabel") }), el("p", {}, rich(b.text, true)));
+  }
+  // "This is not our office's indicator": records "not ours" and skips the data-supply screen of this indicator.
+  function notOurs(b) {
+    var on = S.answers[b.id] === true;
+    return el("div", { class: "q xq" },
+      el("button", { type: "button", class: "btn ghost notours" + (on ? " on" : ""), "aria-pressed": on ? "true" : "false", "data-k": b.id, text: b.label,
+        onclick: function () { setAns(b.id, !(S.answers[b.id] === true)); redraw(b.id); } }),
+      b.help ? el("p", { class: "help", style: "margin:8px 0 0" }, rich(b.help)) : null);
+  }
   function optCard(id) {
     var o = S.content.options.filter(function (x) { return x.k === id; })[0];
     var studies = S.content.studies.filter(function (s) { return s.opt === id; });
@@ -434,23 +547,32 @@
     switch (b.t) {
       case "h": return el("h2", {}, rich(b.text));
       case "h3": return el("h3", {}, rich(b.text));
-      case "lead": return el("p", { class: "lead" }, rich(b.text));
-      case "p": return el("p", {}, rich(b.text));
-      case "help": return el("p", { class: "help" }, rich(b.text));
+      case "lead": return el("p", { class: "lead" }, rich(b.text, true));
+      case "p": return el("p", {}, rich(b.text, true));
+      case "help": return el("p", { class: "help" }, rich(b.text, true));
+      case "small": return el("p", { class: "help small" }, rich(b.text, true));
+      case "formula": return el("p", { class: "formula" }, rich(b.text, true));
+      case "example": return el("blockquote", { class: "legal example" }, rich(b.text, true));
       case "pill": return el("span", { class: "pill" }, el("b"), document.createTextNode(b.text));
-      case "ul": return el("ul", { class: "plain" }, b.items.map(function (i) { return el("li", {}, rich(i)); }));
-      case "note": return el("div", { class: "note" }, rich(b.text));
+      case "ul": return el("ul", { class: "plain" + (b.plain ? " nobullet" : "") }, b.items.map(function (i) { return el("li", {}, rich(i, true)); }));
+      case "note": return el("div", { class: "note" }, rich(b.text, true));
       case "legal": return el("blockquote", { class: "legal" }, rich(b.text));
-      case "tiles": return el("div", { class: "tiles" }, b.items.map(function (i) { return el("div", { class: "tile" }, el("b", {}, rich(i.big)), el("span", {}, rich(i.small))); }));
+      case "tiles": return el("div", { class: "tiles" }, b.items.map(function (i) { return el("div", { class: "tile" }, el("b", {}, rich(i.big)), el("span", {}, rich(i.small, true))); }));
       case "two": return el("div", { class: "two" },
-        el("div", { class: "box yes" }, el("h3", { text: b.left.title }), el("ul", {}, b.left.items.map(function (i) { return el("li", {}, rich(i)); }))),
-        el("div", { class: "box no" }, el("h3", { text: b.right.title }), el("ul", {}, b.right.items.map(function (i) { return el("li", {}, rich(i)); }))));
+        el("div", { class: "box yes" }, el("h3", { text: b.left.title }), el("ul", {}, b.left.items.map(function (i) { return el("li", {}, rich(i, true)); }))),
+        el("div", { class: "box no" }, el("h3", { text: b.right.title }), el("ul", {}, b.right.items.map(function (i) { return el("li", {}, rich(i, true)); }))));
       case "q": return question(b.id);
       case "consent":
         var cur = S.answers[b.id] === true;
         var inp = el("input", { type: "checkbox", checked: cur, onchange: function () { setAns(b.id, inp.checked); redraw(); } });
-        return el("label", { class: "opt" + (cur ? " sel" : "") }, inp, el("span", {}, rich(b.text)));
+        return el("div", { class: "q" }, b.label ? el("div", { class: "t" }, el("span", { class: "qno", text: b.id }), rich(b.label)) : null,
+          el("label", { class: "opt" + (cur ? " sel" : "") }, inp, el("span", {}, rich(b.text))));
       case "details": return el("details", {}, el("summary", { text: b.summary }), b.blocks.map(block));
+      case "research": return research(b);
+      case "flow": return flowDiagram(b);
+      case "levels": return levelsTable(b);
+      case "advice": return advice(b);
+      case "notours": return notOurs(b);
       case "optionCard": return optCard(b.id);
       case "compare": return compare();
       case "targetCard": return targetCard();
@@ -523,7 +645,7 @@
     if (S.queue.length) { flush(); msg($("exitMsg"), T("exitSaving"), ""); return; }
     closeGloss(false);
     S.code = null; S.hash = null; S.forms = []; S.form = null; S.cameFrom = null; S.carried = []; S.content = null; S.variants = null; S.lang = null; S.session = null;
-    S.answers = {}; S.order = {}; S.pos = null; S.furthest = 0; S.completed = false; S.queue = [];
+    S.answers = {}; S.order = {}; S.shown = {}; S.open = {}; S.pos = null; S.furthest = 0; S.completed = false; S.queue = [];
     $("main").innerHTML = ""; $("segs").innerHTML = ""; $("langBtn").hidden = true; document.documentElement.lang = "en";
     $("code").value = ""; msg($("gateMsg"), "", ""); status("");
     showOnly("gate"); window.scrollTo(0, 0); $("code").focus();
@@ -532,7 +654,7 @@
   // ---------- saving ----------
   function persist() {
     if (!S.hash || !S.form) return;
-    store("pk1_" + S.hash + "_" + S.form, { session: S.session, answers: S.answers, order: S.order, pos: S.pos, furthest: S.furthest, completed: S.completed, queue: S.queue, lang: S.lang, v: S.content && S.content.meta && S.content.meta.version });
+    store("nhete1_" + S.hash + "_" + S.form, { session: S.session, answers: S.answers, order: S.order, pos: S.pos, furthest: S.furthest, completed: S.completed, queue: S.queue, shown: S.shown, lang: S.lang, v: S.content && S.content.meta && S.content.meta.version });
   }
   function status(text, warn) {
     var s = $("saveState"); s.hidden = !text; s.textContent = text || ""; s.className = "save" + (warn ? " warn" : "");
@@ -564,11 +686,12 @@
     ids.forEach(function (id) {
       if (S.answers[id] !== undefined) patch[id] = S.answers[id];
       if (S.answers[id + "_text"] !== undefined) patch[id + "_text"] = S.answers[id + "_text"];
+      if (S.answers[id + "_c"] !== undefined) patch[id + "_c"] = S.answers[id + "_c"];
       if (S.order[id]) ord[id] = S.order[id];
     });
     if (sc.consent && S.answers[sc.consent] !== undefined) patch[sc.consent] = S.answers[sc.consent];
     (S.carried || []).forEach(function (k) { if (S.answers[k] !== undefined && patch[k] === undefined) patch[k] = S.answers[k]; });
-    var profile = {}; ["0.1", "0.2", "0.3", "B1"].forEach(function (k) { if (S.answers[k] != null) profile[k] = S.answers[k]; });
+    var profile = {}; ["0.1", "0.2", "0.3", "0.4"].forEach(function (k) { if (S.answers[k] != null) profile[k] = S.answers[k]; });
     if (S.lang) profile.lang = S.lang;
     if (!Object.keys(patch).length && !complete) return;
     enqueue({ patch: patch, profile: profile, order: ord, complete: !!complete });
@@ -606,9 +729,11 @@
     // progress pills
     var total = S.content.meta && S.content.meta.stopCount;
     $("crumb").lastChild.textContent = (st.num != null && st.num !== 0 && total ? T("stopOf", { n: st.num, total: total }) : st.label);
-    $("crumb2").textContent = sc.crumb || st.label; $("crumb2").hidden = !(sc.crumb || st.label) || (sc.crumb || st.label) === $("crumb").lastChild.textContent;
+    var c2 = sc.crumb || st.label; S.seen = {};
+    $("crumb2").innerHTML = ""; $("crumb2").appendChild(rich(c2)); $("crumb2").hidden = !c2 || plainText(c2) === $("crumb").lastChild.textContent;
     // body
     var main = $("main"); main.innerHTML = "";
+    S.seen = {}; S.rk = 0;
     var nodes = (sc.blocks || []).map(block).filter(Boolean);
     if (sc.bare) nodes.forEach(function (n) { main.appendChild(n); });
     else main.appendChild(el("div", { class: "card" }, nodes));
@@ -643,7 +768,7 @@
     var btn = $("nextBtn"), msgEl = $("needMsg"), tries = 0;
     if (btn) { btn.disabled = true; btn.textContent = T("submitting"); }
     (function check() {
-      if (!S.queue.length) { S.completed = true; S.pos = finalId; persist(); render(); return; }
+      if (!S.queue.length) { S.completed = true; S.pos = finalId; persist(); render(); status(T("submittedMsg")); return; }
       tries++; flush();
       if (tries > 40) { if (btn) { btn.disabled = false; btn.textContent = T("submit"); } if (msgEl) { msgEl.hidden = false; msgEl.textContent = T("submitFail"); } return; }
       setTimeout(check, 500);
@@ -673,7 +798,7 @@
   function backToStart() {
     var f = formByName(S.cameFrom); if (!f) return;
     var pos = S.backPos || "about";
-    store("pk1_" + S.hash + "_" + S.form, undefined);
+    store("nhete1_" + S.hash + "_" + S.form, undefined);
     S.cameFrom = null; startForm(f, { pos: pos });
   }
   function go(idx) {
@@ -696,7 +821,7 @@
   function startForm(f, opts) {
     opts = opts || {};
     S.form = f.form; S.cameFrom = opts.from || null; S.backPos = opts.backPos || null; S.entryPos = opts.skipTo || null; S.carried = Object.keys(opts.carry || {});
-    var key = "pk1_" + S.hash + "_" + S.form, saved = load(key);
+    var key = "nhete1_" + S.hash + "_" + S.form, saved = load(key);
     var fc = f.content || {};
     if (fc.variants && Object.keys(fc.variants).length) {
       S.top = fc; S.variants = fc.variants;
@@ -708,17 +833,17 @@
       var m = $("main"); m.innerHTML = ""; m.appendChild(el("div", { class: "card" }, el("h2", { text: T("stubTitle") }), el("p", { text: T("stubText") })));
       return;
     }
-    function fresh() { S.session = uuid(); S.answers = Object.assign({}, opts.carry || {}); S.order = {}; S.furthest = 0; S.completed = false; S.queue = []; S.pos = opts.skipTo || flat()[0].sc.id; var fl = flat(); S.furthest = Math.max(0, fl.map(function (x) { return x.sc.id; }).indexOf(S.pos)); persist(); showOnly("module"); render(); }
+    function fresh() { S.session = uuid(); S.answers = Object.assign({}, opts.carry || {}); S.order = {}; S.shown = {}; S.open = {}; S.furthest = 0; S.completed = false; S.queue = []; S.pos = opts.skipTo || flat()[0].sc.id; var fl = flat(); S.furthest = Math.max(0, fl.map(function (x) { return x.sc.id; }).indexOf(S.pos)); persist(); showOnly("module"); render(); }
     S.session = S.session || null;
     var live = saved && saved.session && saved.answers && Object.keys(saved.answers).length && !saved.completed && saved.pos;
-    if (live) { S.session = saved.session; S.answers = saved.answers; S.order = saved.order || {}; S.pos = saved.pos; S.furthest = saved.furthest || 0; S.completed = false; S.queue = saved.queue || []; }
+    if (live) { S.session = saved.session; S.answers = saved.answers; S.order = saved.order || {}; S.shown = saved.shown || {}; S.open = {}; S.pos = saved.pos; S.furthest = saved.furthest || 0; S.completed = false; S.queue = saved.queue || []; }
     if (live && opts.carry) { Object.keys(opts.carry).forEach(function (k) { S.answers[k] = opts.carry[k]; }); persist(); }
     // coming back from the short form to the first question: open there at once, with the answers kept
     if (live && opts.pos) { S.pos = opts.pos; showOnly("module"); render(); return; }
     if (live) {
       showOnly("module"); resetProg(); langButton();
       var main = $("main"); main.innerHTML = "";
-      main.appendChild(el("div", { class: "card" }, el("h2", { text: T("resumeTitle") }), el("p", { text: T("resumeText") }),
+      main.appendChild(el("div", { class: "card" }, el("h2", { text: T("resumeTitle") }), el("p", { text: T("resumeText") }), el("p", { class: "help", text: T("changeDevice") }),
         el("div", { class: "nav2", style: "justify-content:flex-start;gap:12px" },
           el("button", { type: "button", class: "btn", text: T("resumeYes"), onclick: function () { showOnly("module"); render(); flush(); } }),
           el("button", { type: "button", class: "btn ghost", text: T("resumeNo"), onclick: function () { fresh(); } }))));
@@ -749,7 +874,7 @@
         S.hash = h;
         if (!S.forms.length) { msg(out, "Nothing is open for this code yet.", "err"); return; }
         // everyone starts in the full form; question 0.1 sends BHWs to the short form. A BHW with unfinished answers goes straight back to it.
-        var bhw = formByName("bhw"), sv = bhw && load("pk1_" + S.hash + "_bhw");
+        var bhw = formByName("bhw"), sv = bhw && load("nhete1_" + S.hash + "_bhw");
         if (bhw && sv && sv.session && sv.answers && Object.keys(sv.answers).length && !sv.completed && sv.pos) startForm(bhw);
         else startForm(formByName("full") || S.forms[0]);
       });
