@@ -39,3 +39,5 @@ Under **Entry review**, Exclude removes an entry from agreement summaries, data-
 Syntax compatibility: the current Code.gs avoids the logical-assignment operator that caused an Apps Script parse error at line 192. All server .gs files were checked with an ES2020 parser, and the 33 backend tests pass.
 
 Consent storage fix: update Code.gs to preserve decimal-looking question IDs as text. Historical consent answers stored under numeric 0 are read back as question 0.0 without rewriting the archive. An unchecked or missing answer is never converted into agreement. This fix requires only Code.gs to be replaced and redeployed.
+
+Scroll-position fix: replace **Client.html only**, save, and deploy a new version to prevent answer selections from resetting the ground-rule table. Both table scroll directions, the current control and expanded research/data-detail panels are preserved. Verified with mobile touch selections on F07, conditional comments, retained text, and the public-entry/review browser test.

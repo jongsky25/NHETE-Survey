@@ -68,6 +68,7 @@
   let token = sessionStorage.getItem('nhete-token') || localStorage.getItem('nhete-public-token') || '', data, content, qmap, screenIndex = 0, furthest = 0;
   let dirty = {}, busy = false, timer, retry = null, conflict = false, storedKey, device;
   const adviceOpen = new Set();
+  let viewRestoreGeneration=0;
   function el(tag, attrs, ...children) {
     const node = document.createElement(tag);
     Object.entries(attrs || {}).forEach(([key, value]) => {
@@ -170,7 +171,58 @@
   function sourceText(row,tag='p',attrs={}) {
     return el(tag,{'data-source-ref':row.ref,...attrs},rich(row));
   }
+  function captureView() {
+    const active=document.activeElement;
+    const scope=active?.closest('[data-question-id],[data-view-key]');
+    return {
+      screen:currentScreen().id,x:window.scrollX,y:window.scrollY,
+      scrolls:Array.from(main.querySelectorAll('[data-scroll-key]')).map(node=>({key:node.dataset.scrollKey,left:node.scrollLeft,top:node.scrollTop})),
+      panels:Array.from(main.querySelectorAll('details[data-view-key]')).map(node=>({key:node.dataset.viewKey,open:node.open})),
+      active:scope&&/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(active.tagName)?{
+        question:scope.dataset.questionId,view:scope.dataset.viewKey,
+        tag:active.tagName,name:active.name,value:active.value,id:active.id,top:active.getBoundingClientRect().top
+      }:null
+    };
+  }
+  function redrawInPlace(view=captureView()) {
+    const generation=++viewRestoreGeneration;
+    // Hold the page height while replacing its contents to prevent the browser
+    // from clamping the document scroll position to the temporarily empty page.
+    main.style.minHeight=main.offsetHeight+'px';
+    render();
+    function restore() {
+      if(currentScreen().id!==view.screen || generation!==viewRestoreGeneration)return;
+      const panels=Array.from(main.querySelectorAll('details[data-view-key]'));
+      view.panels.forEach(saved=>{const node=panels.find(p=>p.dataset.viewKey===saved.key);if(node)node.open=saved.open;});
+      const scrolls=Array.from(main.querySelectorAll('[data-scroll-key]'));
+      view.scrolls.forEach(saved=>{
+        const node=scrolls.find(p=>p.dataset.scrollKey===saved.key);
+        if(node){node.scrollLeft=saved.left;node.scrollTop=saved.top;}
+      });
+      window.scrollTo(view.x,view.y);
+      if(view.active) {
+        const saved=view.active;
+        const scopes=Array.from(main.querySelectorAll('[data-question-id],[data-view-key]'));
+        const scope=scopes.find(n=>saved.question?n.dataset.questionId===saved.question:n.dataset.viewKey===saved.view);
+        const control=scope&&Array.from(scope.querySelectorAll('input,textarea,select,button')).find(n=>
+          n.tagName===saved.tag && (saved.id?n.id===saved.id:n.name===saved.name&&n.value===saved.value));
+        if(control){
+          control.focus({preventScroll:true});
+          // Saving status can change the header's height. Keep the selected
+          // control at the same viewport position rather than moving the user.
+          window.scrollBy(0,control.getBoundingClientRect().top-saved.top);
+        }
+      }
+    }
+    restore();
+    requestAnimationFrame(()=>{
+      if(generation!==viewRestoreGeneration)return;
+      main.style.minHeight='';
+      restore();
+    });
+  }
   function setAnswer(qid,value,redraw=false) {
+    const view=redraw?captureView():null;
     dirty[qid]=value;persist();status('Saving…');
     if(rules.valid(qmap[qid],value)) {
       const group=main.querySelector('[data-question-id="'+qid+'"]');
@@ -179,7 +231,7 @@
       group?.querySelectorAll('.question-error').forEach(node=>node.remove());
     }
     clearTimeout(timer);timer=setTimeout(()=>flush().catch(e=>notice(e.message)),2200);
-    if(redraw) { const y=window.scrollY;render();window.scrollTo(0,y); }
+    if(redraw)redrawInPlace(view);
     else updateNavigation();
   }
   function activeQuestions(screen=currentScreen()) {
@@ -297,7 +349,7 @@
       });
       tr.append(el('td',{},rules.relevant(comment,answers(),content)?field(comment,true):null));tbody.append(tr);
     });
-    table.append(tbody);return el('div',{class:'table-wrap'},table);
+    table.append(tbody);return el('div',{class:'table-wrap','data-scroll-key':block.ref},table);
   }
   function supply(block) {
     const indicator=currentScreen().id.replace('ind-','');
@@ -313,7 +365,7 @@
           card.append(field(q));
         }
       });
-      const details=el('details',{},el('summary',{},rich(block.detailsLabel)));
+      const details=el('details',{'data-view-key':'supply:'+part.questions[0]},el('summary',{},rich(block.detailsLabel)));
       part.details.forEach(id=>details.append(field(qmap[id])));card.append(details);section.append(card);
     });
     return section;
@@ -331,7 +383,7 @@
     return sourceText(row,'p',{class:kind.includes('note')?'note':kind.includes('small grey')?'help':''});
   }
   function research(block) {
-    const details=el('details',{class:'research'},el('summary',{text:ui('D-res.1')}),el('p',{class:'help',text:ui('D-res.2')}));
+    const details=el('details',{class:'research','data-view-key':'research:'+currentScreen().id},el('summary',{text:ui('D-res.1')}),el('p',{class:'help',text:ui('D-res.2')}));
     block.entries.forEach(entry=>{
       const article=el('article',{class:'research-entry'},el('p',{class:'small',text:[entry.stance,entry.sourceType].filter(Boolean).join(' · ')}),sourceText(entry.row));
       if(entry.url)article.append(el('a',{href:entry.url,target:'_blank',rel:'noopener noreferrer',text:ui('D-res.10')}));
@@ -375,8 +427,8 @@
       else if(block.type==='supply')card.append(supply(block));
       else if(block.type==='research')card.append(research(block));
       else if(block.type==='advice' && rules.has(answers()[block.after])) {
-        const box=el('div',{class:'advice-control'});
-        box.append(action(ui('D-adv.1'),()=>{adviceOpen.add(block.row.ref);render();}));
+        const box=el('div',{class:'advice-control','data-view-key':'advice:'+block.row.ref});
+        box.append(action(ui('D-adv.1'),()=>{adviceOpen.add(block.row.ref);redrawInPlace();}));
         if(adviceOpen.has(block.row.ref))box.append(el('div',{class:'advice'},el('p',{class:'small',text:ui('D-adv.2')}),sourceText(block.row)));
         card.append(box);
       }
