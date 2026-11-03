@@ -20,7 +20,7 @@ After updating all files, select **Deploy → Manage deployments → pencil → 
 
 This is the November 2 Word-based test build: 10 stops, 81 screens and 35 indicator cards, with the approved C13 = 3 and D13 = 2 data components. Resume is device-specific and reports are attributed to offices. The source closing date is November 17, 2026 at 11:59 PM Manila time.
 
-Local validation: all 1,325 named Word references mapped, 30 backend tests passed, and the browser test traversed all 81 screens. Eight official-source link addresses remain to be verified before final release. Live Google deployment testing is still required.
+Local validation: all 1,325 named Word references mapped, 33 backend tests passed, and the browser test traversed all 81 screens. Eight official-source link addresses remain to be verified before final release. Live Google deployment testing is still required.
 
 Navigation update: missing required answers are highlighted and brought into view. An incomplete office-details page stays on that page until all four required answers are supplied. The top stop buttons become available as the participant reaches those stops through Continue.
 
@@ -36,4 +36,6 @@ Use **Secretariat sign-in** on the entry page for the protected Google administr
 
 Under **Entry review**, Exclude removes an entry from agreement summaries, data-source follow-up and analytical exports without deleting it. Restore includes it again. **Export all entries (including excluded)** keeps all original answers with name, email, agency and review status. The profile and review sheets are created automatically.
 
-Syntax compatibility: the current Code.gs avoids the logical-assignment operator that caused an Apps Script parse error at line 192. All server .gs files were checked with an ES2020 parser, and the 30 backend tests pass.
+Syntax compatibility: the current Code.gs avoids the logical-assignment operator that caused an Apps Script parse error at line 192. All server .gs files were checked with an ES2020 parser, and the 33 backend tests pass.
+
+Consent storage fix: update Code.gs to preserve decimal-looking question IDs as text. Historical consent answers stored under numeric 0 are read back as question 0.0 without rewriting the archive. An unchecked or missing answer is never converted into agreement. This fix requires only Code.gs to be replaced and redeployed.

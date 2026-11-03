@@ -181,18 +181,42 @@ function owner_(person, device) {
   if (typeof device !== 'string' || !/^[a-zA-Z0-9-]{32,100}$/.test(device)) throw new Error('Please use the device where you started.');
   return hash_(person.publicEntry ? content_().version + ':entry:' + person.entryId : content_().version + ':' + person.email + ':' + device);
 }
+function storedQuestionId_(raw, numericIds) {
+  let id = String(raw);
+  // New writes encode IDs as JSON strings so Sheets cannot turn "0.0" into 0.
+  if (id.charAt(0) === '"') {
+    try {
+      const decoded = JSON.parse(id);
+      if (typeof decoded === 'string') return decoded;
+    } catch (error) { /* Preserve an unfamiliar historical ID rather than drop data. */ }
+  }
+  if (/^\d+(?:\.\d+)?$/.test(id)) {
+    const candidates = numericIds[String(Number(id))];
+    if (candidates && candidates.length === 1) return candidates[0];
+  }
+  return id;
+}
 function moduleState_(owner, revisions, fragments) {
   const state = {owner, version: 0, status: 'not started', answers: {}, savedAt: '', screen: 'welcome'};
   const history = (revisions || moduleRows_('Module20261102Revisions')).filter(r => r.owner === owner);
   const parts = (fragments || moduleRows_('Module20261102Changes')).filter(r => r.owner === owner);
+  const numericIds = {};
+  content_().questions.forEach(q => {
+    if (/^\d+(?:\.\d+)?$/.test(q.id)) {
+      const key = String(Number(q.id));
+      if (!numericIds[key]) numericIds[key] = [];
+      numericIds[key].push(q.id);
+    }
+  });
   history.forEach(r => {
     if (Number(r.version) !== state.version + 1) throw new Error('Response history needs secretariat attention.');
     const grouped = {};
     parts.filter(p => p.commitId === r.commitId).forEach(p => {
-      if (!grouped[p.questionId]) {
-        grouped[p.questionId] = [];
+      const questionId = storedQuestionId_(p.questionId, numericIds);
+      if (!grouped[questionId]) {
+        grouped[questionId] = [];
       }
-      grouped[p.questionId].push(p);
+      grouped[questionId].push(p);
     });
     Object.keys(grouped).forEach(qid => {
       const sorted = grouped[qid].sort((a,b) => Number(a.partIndex) - Number(b.partIndex));
@@ -249,7 +273,7 @@ function saveAnswers(token, request) {
     const commit = random_(), rows = [];
     Object.keys(changes).forEach(qid => {
       const text = JSON.stringify(changes[qid]);
-      for (let i=0;i<text.length;i+=12000) rows.push([owner,commit,qid,i/12000,JSON.stringify(text.slice(i,i+12000))]);
+      for (let i=0;i<text.length;i+=12000) rows.push([owner,commit,JSON.stringify(qid),i/12000,JSON.stringify(text.slice(i,i+12000))]);
     });
     if (rows.length) {
       const s = sheet_('Module20261102Changes');
