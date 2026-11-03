@@ -34,7 +34,7 @@ const NHETE_SERVER_RULES_ = (function () {
   function noView(value) { return typeof value === 'string' && /^No view or opinion(?:\.|$)/u.test(value); }
   function tally(q, responses, content) {
     const counts = {}; let n = 0;
-    responses.filter(p => p.status === 'submitted').forEach(p => {
+    responses.filter(p => p.status === 'submitted' && p.review?.included !== false).forEach(p => {
       const value = p.answers[q.id];
       if (!relevant(q, p.answers, content) || !has(value) || noView(value) || Array.isArray(value) && value.some(noView)) return;
       n++;
@@ -46,7 +46,7 @@ const NHETE_SERVER_RULES_ = (function () {
     return {counts, n, modes, agreement, shortlist: n >= 6 && agreement >= .75};
   }
   function office(response) {
-    return response.answers['0.1'] === 'Other (specify)' ? response.answers['0.1:extra'] || 'Other (specify)' : response.answers['0.1'] || '';
+    return response.answers['0.1'] === 'Other (specify)' ? response.answers['0.1:extra'] || 'Other (specify)' : response.answers['0.1'] || response.entry?.agency || '';
   }
   function csvCell(value) {
     let text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -116,6 +116,9 @@ function locked_(fn) {
 }
 // November response journal is separate from all existing October responses.
 const MODULE_TABLES_ = {
+  Module20261102Entries: ['entryId', 'deviceHash', 'profile', 'createdAt'],
+  Module20261102PublicSessions: ['tokenHash', 'entryId', 'deviceHash', 'expiresAt'],
+  Module20261102Reviews: ['owner', 'included', 'reason', 'actor', 'reviewedAt'],
   Module20261102Devices: ['accountHash', 'owner'],
   Module20261102Revisions: ['owner', 'version', 'requestId', 'status', 'savedAt', 'screen', 'commitId'],
   Module20261102Changes: ['owner', 'commitId', 'questionId', 'partIndex', 'fragment'],
@@ -135,9 +138,48 @@ function ensureModule_() {
     }
   });
 }
+function validDevice_(device) {
+  if (typeof device !== 'string' || !/^[a-zA-Z0-9-]{32,100}$/.test(device)) throw new Error('Please use the device where you started.');
+  return hash_(device);
+}
+function entryProfile_(input) {
+  if (!input || typeof input !== 'object') throw new Error('Please enter your email, name and agency.');
+  const profile = {email: email_(input.email), name: String(input.name || '').trim(), agency: String(input.agency || '').trim()};
+  if (profile.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) throw new Error('Please enter a valid email address.');
+  if (!profile.name || profile.name.length > 200) throw new Error('Please enter your name (up to 200 characters).');
+  if (!profile.agency || profile.agency.length > 300) throw new Error('Please enter the agency you represent (up to 300 characters).');
+  return profile;
+}
+function enterConsultation(input, device) {
+  const profile = entryProfile_(input), deviceHash = validDevice_(device);
+  return locked_(() => {
+    ensureModule_();
+    const entries = moduleRows_('Module20261102Entries');
+    let entry = entries.find(e => e.deviceHash === deviceHash && e.profile === JSON.stringify(profile));
+    if (!entry) {
+      writable_();
+      entry = {entryId: random_(), deviceHash, profile: JSON.stringify(profile), createdAt: new Date().toISOString()};
+      // The profile is JSON-encoded so names or agencies cannot become Sheet formulas.
+      sheet_('Module20261102Entries').appendRow([entry.entryId,deviceHash,entry.profile,entry.createdAt]);
+    }
+    const token = 'entry-' + random_(), expiresAt = new Date(Date.now()+30*24*60*60*1000).toISOString();
+    sheet_('Module20261102PublicSessions').appendRow([hash_(token),entry.entryId,deviceHash,expiresAt]);
+    return {token,profile};
+  });
+}
+function participant_(token, device) {
+  const deviceHash = validDevice_(device);
+  if (typeof token !== 'string' || token.length > 200) throw new Error('Please enter your details to continue.');
+  if (!token.startsWith('entry-')) return authenticate_(token,false); // Existing signed-in responses remain accessible.
+  const session = moduleRows_('Module20261102PublicSessions').find(s => s.tokenHash === hash_(token) && Date.parse(s.expiresAt)>Date.now());
+  if (!session || session.deviceHash !== deviceHash) throw new Error('Please enter your details on the device where you started.');
+  const entry = moduleRows_('Module20261102Entries').find(e => e.entryId === session.entryId && e.deviceHash === deviceHash);
+  if (!entry) throw new Error('Please enter your details to continue.');
+  return {publicEntry:true,entryId:entry.entryId,profile:JSON.parse(entry.profile),admin:false};
+}
 function owner_(person, device) {
   if (typeof device !== 'string' || !/^[a-zA-Z0-9-]{32,100}$/.test(device)) throw new Error('Please use the device where you started.');
-  return hash_(content_().version + ':' + person.email + ':' + device);
+  return hash_(person.publicEntry ? content_().version + ':entry:' + person.entryId : content_().version + ':' + person.email + ':' + device);
 }
 function moduleState_(owner, revisions, fragments) {
   const state = {owner, version: 0, status: 'not started', answers: {}, savedAt: '', screen: 'welcome'};
@@ -174,21 +216,21 @@ function validateChanges_(changes) {
   return cleaned;
 }
 function bootstrap(token, device) {
-  const p = authenticate_(token,false);
+  const p = participant_(token,device);
   locked_(ensureModule_);
   const owner = owner_(p,device);
   let open = true; try { writable_(); } catch (_) { open = false; }
-  const accountHash = hash_(p.email);
+  const accountHash = hash_(p.publicEntry ? 'entry:'+p.entryId : p.email);
   const differentDevice = locked_(() => {
     const devices = moduleRows_('Module20261102Devices');
     const known = devices.filter(d => d.accountHash === accountHash && d.owner !== owner).map(d => d.owner);
     if (!devices.some(d => d.accountHash === accountHash && d.owner === owner)) sheet_('Module20261102Devices').appendRow([accountHash,owner]);
     return moduleRows_('Module20261102Revisions').some(r => known.includes(r.owner));
   });
-  return {person: {admin: p.admin}, content: content_(), response: moduleState_(owner), open, differentDevice, closesAt: content_().closesAt};
+  return {person: {admin: p.admin, entry: p.profile || null}, content: content_(), response: moduleState_(owner), open, differentDevice, closesAt: content_().closesAt};
 }
 function saveAnswers(token, request) {
-  const person = authenticate_(token,false);
+  const person = participant_(token,request && request.device);
   if (!request || !/^[a-zA-Z0-9-]{8,100}$/.test(request.requestId || '')) throw new Error('Invalid save identifier.');
   const owner = owner_(person,request.device), changes = validateChanges_(request.changes);
   if (!content_().screens.some(s => s.id === request.screen)) throw new Error('Unknown screen.');
@@ -220,8 +262,27 @@ function adminData(token) {
   authenticate_(token,true);
   locked_(ensureModule_);
   const revisions = moduleRows_('Module20261102Revisions'), fragments = moduleRows_('Module20261102Changes');
-  const owners = [...new Set(revisions.map(r => r.owner))];
-  return {responses: owners.map(owner => moduleState_(owner,revisions,fragments)), decisions: moduleRows_('Module20261102Decisions')};
+  const entries = moduleRows_('Module20261102Entries'), reviews = moduleRows_('Module20261102Reviews');
+  const entryOwners = Object.fromEntries(entries.map(e => [hash_(content_().version+':entry:'+e.entryId),JSON.parse(e.profile)]));
+  const owners = [...new Set([...revisions.map(r => r.owner),...Object.keys(entryOwners)])];
+  return {responses: owners.map(owner => {
+    const state = moduleState_(owner,revisions,fragments);
+    const review = reviews.filter(r => r.owner === owner).pop();
+    return {...state,entry:entryOwners[owner] || null,review:review ? {included:truth_(review.included),reason:JSON.parse(review.reason),reviewedAt:String(review.reviewedAt)} : {included:true,reason:'',reviewedAt:''}};
+  }), decisions: moduleRows_('Module20261102Decisions')};
+}
+function setEntryReview(token, input) {
+  const actor = authenticate_(token,true);
+  if (!input || typeof input.owner !== 'string' || typeof input.included !== 'boolean') throw new Error('Choose an entry and review action.');
+  const reason = String(input.reason || '').trim();
+  if (NHETE_SERVER_RULES_.words(reason)>1500) throw new Error('Keep the review reason to 1,500 words or fewer.');
+  return locked_(() => {
+    ensureModule_();
+    const exists = moduleRows_('Module20261102Revisions').some(r => r.owner === input.owner) || moduleRows_('Module20261102Entries').some(e => hash_(content_().version+':entry:'+e.entryId) === input.owner);
+    if (!exists) throw new Error('Entry not found.');
+    sheet_('Module20261102Reviews').appendRow([input.owner,input.included,JSON.stringify(reason),actor.email,new Date().toISOString()]);
+    return {ok:true};
+  });
 }
 function recordDecision(token,input) {
   const actor = authenticate_(token,true);
@@ -231,7 +292,11 @@ function recordDecision(token,input) {
 }
 function signOut(token) {
   const hash = hash_(String(token || ''));
-  locked_(() => { const s=sheet_('Sessions'), values=s.getDataRange().getValues(); for(let i=values.length-1;i>0;i--) if(values[i][0]===hash) s.deleteRow(i+1); });
+  locked_(() => {
+    const name = String(token || '').startsWith('entry-') ? 'Module20261102PublicSessions' : 'Sessions';
+    const s=sheet_(name), values=s.getDataRange().getValues();
+    for(let i=values.length-1;i>0;i--) if(values[i][0]===hash) s.deleteRow(i+1);
+  });
 }
 function beginGoogleSignIn(verifierHash) {
   if (!/^[a-f0-9]{64}$/.test(verifierHash || '')) throw new Error('This browser cannot start a secure sign-in.');
@@ -263,6 +328,7 @@ function googleCallback_(parameters) {
   const identity = JSON.parse(info.getContentText());
   if (identity.email_verified !== true || !identity.sub) throw new Error('Use a verified Google account.');
   const person = roster_(email_(identity.email));
+  if (!person.admin) throw new Error('This Google sign-in is for secretariat administrators only. Participants can enter their details on the entry form.');
   const pending = random_();
   cache.put('pending:' + hash_(pending), JSON.stringify({email: person.email, verifierHash}), 300);
   return pending;

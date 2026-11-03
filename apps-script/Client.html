@@ -36,7 +36,7 @@
   function noView(value) { return typeof value === 'string' && /^No view or opinion(?:\.|$)/u.test(value); }
   function tally(q, responses, content) {
     const counts = {}; let n = 0;
-    responses.filter(p => p.status === 'submitted').forEach(p => {
+    responses.filter(p => p.status === 'submitted' && p.review?.included !== false).forEach(p => {
       const value = p.answers[q.id];
       if (!relevant(q, p.answers, content) || !has(value) || noView(value) || Array.isArray(value) && value.some(noView)) return;
       n++;
@@ -48,7 +48,7 @@
     return {counts, n, modes, agreement, shortlist: n >= 6 && agreement >= .75};
   }
   function office(response) {
-    return response.answers['0.1'] === 'Other (specify)' ? response.answers['0.1:extra'] || 'Other (specify)' : response.answers['0.1'] || '';
+    return response.answers['0.1'] === 'Other (specify)' ? response.answers['0.1:extra'] || 'Other (specify)' : response.answers['0.1'] || response.entry?.agency || '';
   }
   function csvCell(value) {
     let text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
@@ -65,7 +65,7 @@
   const main = document.getElementById('main'), badge = document.getElementById('saveState');
   const boot = window.NHETE_BOOT || {}, rules = window.NheteRules;
   const demo = !window.google?.script?.run && new URLSearchParams(location.search).get('demo') === '1';
-  let token = sessionStorage.getItem('nhete-token') || '', data, content, qmap, screenIndex = 0, furthest = 0;
+  let token = sessionStorage.getItem('nhete-token') || localStorage.getItem('nhete-public-token') || '', data, content, qmap, screenIndex = 0, furthest = 0;
   let dirty = {}, busy = false, timer, retry = null, conflict = false, storedKey, device;
   const adviceOpen = new Set();
   function el(tag, attrs, ...children) {
@@ -386,14 +386,14 @@
       const submit=screen.blocks.find(b=>b.type==='submit');
       main.append(el('div',{class:'page-actions'},action(ui('D-nav.2'),()=>go(screenIndex-1,true),{disabled:screenIndex===0}),el('span',{class:'spacer'}),
         action(submit?.row.text || ui('D-nav.1'),()=>go(screenIndex+1),{id:'next',class:'btn'})));
-    } else main.append(action('Exit module',async()=>{await flush();await rpc('signOut',token);sessionStorage.removeItem('nhete-token');token='';login();}));
-    document.getElementById('signout').hidden=!data.person.admin;
-    document.getElementById('signout').textContent='Secretariat';
-    document.getElementById('signout').onclick=()=>showAdmin().catch(e=>notice(e.message));
+    } else main.append(action('Exit module',leaveModule));
+    document.getElementById('signout').hidden=false;
+    document.getElementById('signout').textContent=data.person.admin?'Secretariat':'Exit module';
+    document.getElementById('signout').onclick=()=> (data.person.admin?showAdmin():leaveModule()).catch(e=>notice(e.message,true));
     updateNavigation();
   }
   function table(headers,rows) {
-    return el('div',{class:'table-wrap'},el('table',{},el('thead',{},el('tr',{},headers.map(text=>el('th',{scope:'col',text})))),el('tbody',{},rows.map(row=>el('tr',{},row.map(text=>el('td',{text})))))));
+    return el('div',{class:'table-wrap'},el('table',{},el('thead',{},el('tr',{},headers.map(text=>el('th',{scope:'col',text})))),el('tbody',{},rows.map(row=>el('tr',{},row.map(value=>el('td',{},value instanceof Node?value:String(value ?? ''))))))));
   }
   function download(filename,rows) {
     const text='\ufeff'+rows.map(row=>row.map(rules.csvCell).join(',')).join('\r\n');
@@ -403,27 +403,39 @@
   async function showAdmin() {
     if(!await flush())return;
     const result=await rpc('adminData',token);
+    const included=result.responses.filter(r=>r.review?.included!==false);
     main.replaceChildren(action('Return to module',render),el('h1',{text:'Secretariat'}),
-      el('p',{text:'November module. Office-attributed responses; no participant names are collected in the questionnaire. October response records are preserved separately.'}));
-    main.append(table(['Office','Office role','Position represented','Status','Last saved'],result.responses.map(r=>[rules.office(r),r.answers['0.2'] || '',r.answers['0.3'] || '',r.status,r.savedAt])));
+      el('p',{text:'Email, name and agency are self-reported. All entries are included by default. Exclude unsuitable entries to remove them from summaries and analytical exports; their original answers remain available in the all-entry export.'}));
+    main.append(el('h2',{text:'Entry review'}),table(['Name','Email','Agency represented','Office in questionnaire','Role','Response status','Review status','Reason','Action'],result.responses.map(r=>{
+      const accepted=r.review?.included!==false;
+      const reason=el('input',{type:'text','aria-label':'Review reason for '+(r.entry?.name || rules.office(r) || r.owner),placeholder:'Optional reason'});reason.value=r.review?.reason || '';
+      const button=action(accepted?'Exclude':'Restore',async()=>{
+        await rpc('setEntryReview',token,{owner:r.owner,included:!accepted,reason:reason.value});await showAdmin();
+      });
+      return [r.entry?.name || '',r.entry?.email || '',r.entry?.agency || '',rules.office(r),r.answers['0.2'] || '',r.status,accepted?'Included':'Excluded',reason,button];
+    })));
+
     const rows=content.questions.filter(q=>['choice','multi','check'].includes(q.type)).map(q=>{
-      const t=rules.tally(q,result.responses,content);return [q.id,q.label.text,t.n,t.modes.join(' / '),t.n?Math.round(t.agreement*100)+'%':'',t.shortlist?'Proposed shortlist':'Discuss',JSON.stringify(t.counts)];
+      const t=rules.tally(q,included,content);return [q.id,q.label.text,t.n,t.modes.join(' / '),t.n?Math.round(t.agreement*100)+'%':'',t.shortlist?'Proposed shortlist':'Discuss',JSON.stringify(t.counts)];
     });
     main.append(el('h2',{text:'Agreement summaries'}),table(['Reference','Question','With a view','Most common','Agreement','Route','Counts'],rows));
     const dataRows=content.indicators.map(ind=>{
-      const relevant=result.responses.filter(r=>r.status==='submitted');
+      const relevant=included.filter(r=>r.status==='submitted');
       const notOurs=relevant.filter(r=>r.answers[ind.code+':notOurs']).map(rules.office);
       const holders=relevant.filter(r=>Object.entries(r.answers).some(([id,value])=>id.startsWith(ind.code+':part') && id.endsWith(':SG.1') && ['Yes, we keep it','We keep something close to it (please describe)'].includes(value))).map(rules.office);
       return [ind.code,ind.title,[...new Set(holders)].join('; '),[...new Set(notOurs)].join('; '),holders.length?'Custodian reported':'BLHSD follow-up: no confirmed custodian'];
     });
     main.append(el('h2',{text:'Data custodians and follow-up'}),table(['Indicator','Title','Offices reporting data','Offices reporting not ours','Follow-up'],dataRows));
-    main.append(action('Export office-attributed responses',()=>download('NHETE-November-responses.csv',
-      [['Response ID','Office','Status','Saved at',...content.questions.map(q=>q.id)]].concat(result.responses.map(r=>[r.owner,rules.office(r),r.status,r.savedAt,...content.questions.map(q=>rules.relevant(q,r.answers,content)?r.answers[q.id] ?? '':'')])))),
+    const exportResponses=list=>[['Response ID','Name','Email','Agency represented','Office','Status','Included','Review reason','Saved at',...content.questions.map(q=>q.id)]].concat(list.map(r=>[
+      r.owner,r.entry?.name || '',r.entry?.email || '',r.entry?.agency || '',rules.office(r),r.status,r.review?.included!==false?'Yes':'No',r.review?.reason || '',r.savedAt,
+      ...content.questions.map(q=>rules.relevant(q,r.answers,content)?r.answers[q.id] ?? '':'')]));
+    main.append(action('Export included responses',()=>download('NHETE-November-responses.csv',exportResponses(included))),
+      action('Export all entries (including excluded)',()=>download('NHETE-November-all-entries.csv',exportResponses(result.responses))),
       action('Export component availability',()=>download('NHETE-November-component-availability.csv',
-        [['Office','Status','Indicator','Component','Question','Region','Answer']].concat(result.responses.flatMap(r=>content.questions.filter(q=>q.indicator && rules.relevant(q,r.answers,content)).map(q=>[rules.office(r),r.status,q.indicator,q.component,q.id,q.region || '',r.answers[q.id] ?? '']))))),
+        [['Agency','Status','Indicator','Component','Question','Region','Answer']].concat(included.flatMap(r=>content.questions.filter(q=>q.indicator && rules.relevant(q,r.answers,content)).map(q=>[rules.office(r),r.status,q.indicator,q.component,q.id,q.region || '',r.answers[q.id] ?? '']))))),
       action('Export BLHSD follow-up',()=>download('NHETE-November-BLHSD-follow-up.csv',[['Indicator','Title','Offices reporting data','Not ours','Follow-up'],...dataRows])));
     const comments=[];
-    result.responses.forEach(r=>content.questions.filter(q=>q.type==='text' && rules.relevant(q,r.answers,content) && r.answers[q.id]).forEach(q=>comments.push([rules.office(r),r.status,q.id,r.answers[q.id]])));
+    included.forEach(r=>content.questions.filter(q=>q.type==='text' && rules.relevant(q,r.answers,content) && r.answers[q.id]).forEach(q=>comments.push([rules.office(r),r.status,q.id,r.answers[q.id]])));
     main.append(el('h2',{text:'Office-attributed comments'}),table(['Office','Status','Reference','Answer'],comments));
     const select=el('select',{'aria-label':'Decision question'});
     content.questions.filter(q=>['choice','multi'].includes(q.type)).forEach(q=>select.append(el('option',{value:q.id,text:q.id+' · '+q.label.text})));
@@ -433,6 +445,7 @@
     }),table(['Question','Decision','Reason','Recorded at'],result.decisions.map(d=>[d.questionId,JSON.parse(d.decision),JSON.parse(d.reason),d.savedAt])));
   }
   async function load() {
+    dirty={};furthest=0;retry=null;conflict=false;
     data=await rpc('bootstrap',token,device);content=data.content;qmap=Object.fromEntries(content.questions.map(q=>[q.id,q]));
     storedKey='nhete:'+content.version+':'+data.response.owner;
     const saved=JSON.parse(localStorage.getItem(storedKey) || 'null');
@@ -441,19 +454,60 @@
       const index=content.screens.findIndex(s=>s.id===saved.screen);screenIndex=Math.max(0,index);
       if(saved.response.version!==data.response.version && Object.keys(dirty).length){showConflict(data.response);return;}
     } else screenIndex=0;
+    if(data.person.entry && data.response.version===0 && !rules.has(answers()['0.1'])) {
+      const agency=data.person.entry.agency;
+      const option=qmap['0.1'].options.find(o=>o.text.toLowerCase()===agency.toLowerCase());
+      dirty['0.1']=option?option.text:'Other (specify)';
+      if(!option)dirty['0.1:extra']=agency;
+    }
     furthest=Math.max(furthest,screenIndex);persist();render();status(data.response.version?ui('D-nav.3'):'');
   }
+  async function leaveModule() {
+    if(!await flush())return;
+    await rpc('signOut',token);
+    sessionStorage.removeItem('nhete-token');localStorage.removeItem('nhete-public-token');token='';
+    login();
+  }
   function login(message) {
-    main.replaceChildren(el('section',{class:'card intro'},el('h1',{text:'NHETE'})));
+    main.replaceChildren(el('section',{class:'card intro'},el('h1',{text:'NHETE indicator consultation'})));
     document.getElementById('signout').hidden=true;
-    if(message)main.firstChild.append(el('p',{class:'error',role:'alert',text:message}));
-    if(window.google?.script?.run)main.firstChild.append(action('Continue with Google',async()=>{
+    const card=main.firstChild;
+    if(message)card.append(el('p',{class:'error',role:'alert',text:message}));
+    card.append(el('p',{text:'Enter your details to begin. No account activation or Google sign-in is needed. Entries will be reviewed by the secretariat.'}));
+    const form=el('form',{'aria-label':'Participant entry'});
+    const fields={};
+    for(const [name,label,type,max] of [['email','Email address','email',254],['name','Name','text',200],['agency','Agency represented','text',300]]) {
+      fields[name]=el('input',{id:'entry-'+name,name,type,maxlength:String(max),autocomplete:name==='agency'?'organization':name});fields[name].required=true;
+      form.append(el('label',{for:'entry-'+name,class:'proposal-label',text:label}),fields[name]);
+    }
+    const remembered=JSON.parse(localStorage.getItem('nhete-entry-profile') || 'null');
+    if(remembered)Object.keys(fields).forEach(k=>{fields[k].value=remembered[k] || '';});
+    form.append(el('p',{class:'help',text:'Your email, name, agency and answers will be recorded for secretariat review. Email addresses are self-reported.'}));
+    const start=el('button',{type:'submit',class:'btn',text:'Begin consultation'});form.append(start);
+    form.onsubmit=async e=>{
+      e.preventDefault();if(!form.reportValidity())return;
+      start.disabled=true;
+      try {
+        const profile=Object.fromEntries(Object.entries(fields).map(([key,input])=>[key,input.value.trim()]));
+        const result=await rpc('enterConsultation',profile,device);
+        token=result.token;sessionStorage.removeItem('nhete-token');localStorage.setItem('nhete-public-token',token);
+        localStorage.setItem('nhete-entry-profile',JSON.stringify(result.profile));
+        await load();main.focus();window.scrollTo(0,0);
+      }catch(err){notice(err.message,true);}finally{start.disabled=false;}
+    };
+    if(window.google?.script?.run)card.append(form,action('Secretariat sign-in',()=>adminLogin()));
+    else card.append(el('p',{text:'Live entries are collected through the Apps Script deployment.'}),el('a',{href:'?demo=1',class:'btn',text:'Explore a demonstration'}));
+  }
+  function adminLogin() {
+    main.replaceChildren(el('section',{class:'card intro'},el('h1',{text:'Secretariat sign-in'}),
+      el('p',{text:'Google sign-in is required for the protected secretariat dashboard.'})));
+    main.firstChild.append(action('Continue with Google',async()=>{
       const verifier=crypto.randomUUID()+crypto.randomUUID();sessionStorage.setItem('nhete-oauth-verifier',verifier);
       const digest=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(verifier));
       const hash=Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+      sessionStorage.setItem('nhete-admin-intent','true');
       const url=await rpc('beginGoogleSignIn',hash);main.firstChild.append(el('a',{href:url,target:'_top',class:'btn',text:'Continue to Google'}));
-    }));
-    else main.firstChild.append(el('p',{text:'Live access is available through the Apps Script deployment.'}),el('a',{href:'?demo=1',class:'btn',text:'Explore a demonstration'}));
+    }),action('Return to participant entry',()=>login()));
   }
   let demoResponse={owner:'demonstration',version:0,status:'not started',answers:{},savedAt:'',screen:'welcome'};
   async function demoRpc(name,args) {
@@ -470,6 +524,7 @@
       localStorage.setItem('nhete-demo:'+device,JSON.stringify(demoResponse));return {ok:true,response:structuredClone(demoResponse)};
     }
     if(name==='adminData')return {responses:[structuredClone(demoResponse)],decisions:[]};
+    if(name==='setEntryReview'){demoResponse.review={included:args[1].included,reason:args[1].reason};localStorage.setItem('nhete-demo:'+device,JSON.stringify(demoResponse));return {ok:true};}
     if(name==='recordDecision')throw new Error('Use the live deployment to record adopted decisions.');
     return true;
   }
@@ -482,7 +537,10 @@
       token=await rpc('completeGoogleSignIn',boot.pending,sessionStorage.getItem('nhete-oauth-verifier') || '');
       sessionStorage.removeItem('nhete-oauth-verifier');sessionStorage.setItem('nhete-token',token);
     }
-    if(demo||token)await load();else login(boot.error);
+    if(demo||token) {
+      await load();
+      if(data.person.admin && sessionStorage.getItem('nhete-admin-intent')==='true') {sessionStorage.removeItem('nhete-admin-intent');await showAdmin();}
+    }else login(boot.error);
   } catch(err){login(err.message);}
 })();
 

@@ -35,7 +35,7 @@
   function noView(value) { return typeof value === 'string' && /^No view or opinion(?:\.|$)/u.test(value); }
   function tally(q, responses, content) {
     const counts = {}; let n = 0;
-    responses.filter(p => p.status === 'submitted').forEach(p => {
+    responses.filter(p => p.status === 'submitted' && p.review?.included !== false).forEach(p => {
       const value = p.answers[q.id];
       if (!relevant(q, p.answers, content) || !has(value) || noView(value) || Array.isArray(value) && value.some(noView)) return;
       n++;
@@ -47,7 +47,7 @@
     return {counts, n, modes, agreement, shortlist: n >= 6 && agreement >= .75};
   }
   function office(response) {
-    return response.answers['0.1'] === 'Other (specify)' ? response.answers['0.1:extra'] || 'Other (specify)' : response.answers['0.1'] || '';
+    return response.answers['0.1'] === 'Other (specify)' ? response.answers['0.1:extra'] || 'Other (specify)' : response.answers['0.1'] || response.entry?.agency || '';
   }
   function csvCell(value) {
     let text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
