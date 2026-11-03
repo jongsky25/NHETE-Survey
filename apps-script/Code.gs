@@ -115,6 +115,9 @@ function validateChanges_(changes) {
 }
 function bootstrap(token, device) {
   const p = authenticate_(token,false);
+  if (typeof NheteRules === 'undefined' || typeof NheteRules.missing !== 'function') {
+    throw new Error('Rules.gs is missing or outdated. Add the current Rules.gs file in Apps Script, save, and deploy a new version.');
+  }
   locked_(ensureModule_);
   const owner = owner_(p,device);
   let open = true; try { writable_(); } catch (_) { open = false; }

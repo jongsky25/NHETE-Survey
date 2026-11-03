@@ -83,15 +83,41 @@
   function answers() { return {...data.response.answers,...dirty}; }
   function currentScreen() { return content.screens[screenIndex]; }
   function status(text) { badge.textContent = text; }
-  function notice(text) {
+  function notice(text, bringIntoView=false) {
     let out = document.getElementById('notice');
     if (!out) { out = el('div',{id:'notice',role:'alert',class:'error'}); main.prepend(out); }
     out.textContent = text;
+    if(bringIntoView) {
+      out.tabIndex=-1;
+      out.focus({preventScroll:true});
+      out.scrollIntoView({block:'start'});
+    }
+  }
+  function showMissing(ids) {
+    main.querySelectorAll('.question-error').forEach(node=>node.remove());
+    main.querySelectorAll('.invalid-question').forEach(node=>node.classList.remove('invalid-question'));
+    main.querySelectorAll('[aria-invalid="true"]').forEach(node=>node.removeAttribute('aria-invalid'));
+    notice(ui('D-nav.4'));
+    let first;
+    ids.forEach(id=>{
+      const group=main.querySelector('[data-question-id="'+id+'"]');
+      if(!group)return;
+      group.classList.add('invalid-question');
+      group.querySelectorAll('input,textarea,select').forEach(input=>input.setAttribute('aria-invalid','true'));
+      const error=el('p',{class:'question-error',role:'alert',text:ui('D-nav.4')});
+      if(group.tagName==='TR')group.closest('.table-wrap').before(error);
+      else group.append(error);
+      if(!first)first=group;
+    });
+    if(first) {
+      first.querySelector('input:not(:disabled),textarea:not(:disabled),select:not(:disabled)')?.focus({preventScroll:true});
+      first.scrollIntoView({block:'start'});
+    }
   }
   function action(text, fn, attrs) {
     return el('button',{type:'button',class:'btn ghost',text,...attrs,onclick:async e => {
       const b=e.currentTarget; b.disabled=true;
-      try { await fn(); } catch(err) { notice(err.message); } finally { if (b.isConnected) b.disabled=false; updateNavigation(); }
+      try { await fn(); } catch(err) { notice(err.message,true); } finally { if (b.isConnected) b.disabled=false; updateNavigation(); }
     }});
   }
   function rpc(name,...args) {
@@ -146,6 +172,12 @@
   }
   function setAnswer(qid,value,redraw=false) {
     dirty[qid]=value;persist();status('Saving…');
+    if(rules.valid(qmap[qid],value)) {
+      const group=main.querySelector('[data-question-id="'+qid+'"]');
+      group?.classList.remove('invalid-question');
+      group?.querySelectorAll('[aria-invalid="true"]').forEach(node=>node.removeAttribute('aria-invalid'));
+      group?.querySelectorAll('.question-error').forEach(node=>node.remove());
+    }
     clearTimeout(timer);timer=setTimeout(()=>flush().catch(e=>notice(e.message)),2200);
     if(redraw) { const y=window.scrollY;render();window.scrollTo(0,y); }
     else updateNavigation();
@@ -183,7 +215,7 @@
         retry=request;
         const result=await rpc('saveAnswers',token,request);
         if(result.conflict){retry=null;showConflict(result.response);return false;}
-        if(result.missing){retry=null;notice(ui('D-nav.4'));return false;}
+        if(result.missing){retry=null;showMissing(result.missing);return false;}
         if(!result.ok)throw new Error('Could not confirm the save.');
         data.response=result.response;
         Object.entries(request.changes).forEach(([id,value])=>{if(JSON.stringify(dirty[id])===JSON.stringify(value))delete dirty[id];});
@@ -197,7 +229,7 @@
         const result=await rpc('saveAnswers',token,request);
         retry=null;
         if(result.conflict){showConflict(result.response);return false;}
-        if(result.missing){notice(ui('D-nav.4'));return false;}
+        if(result.missing){showMissing(result.missing);return false;}
         if(!result.ok)throw new Error('Could not confirm the save.');
         data.response=result.response;persist();
       }
@@ -310,7 +342,8 @@
   }
   async function go(index,back=false) {
     if(index<0 || index>=content.screens.length)return;
-    if(!back && rules.missing(content,answers(),currentScreen().id).length){notice(ui('D-nav.4'));return;}
+    const missing=!back?rules.missing(content,answers(),currentScreen().id):[];
+    if(missing.length){showMissing(missing);return;}
     if(!data.open) {screenIndex=index;furthest=Math.max(furthest,index);render();return;}
     const next=content.screens[index];
     const submit=next.id==='end1';

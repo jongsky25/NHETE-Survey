@@ -20,4 +20,6 @@ After updating all files, select **Deploy → Manage deployments → pencil → 
 
 This is the November 2 Word-based test build: 10 stops, 81 screens and 35 indicator cards, with the approved C13 = 3 and D13 = 2 data components. Resume is device-specific and reports are attributed to offices. The source closing date is November 17, 2026 at 11:59 PM Manila time.
 
-Local validation: all 1,325 named Word references mapped, 20 backend tests passed, and the browser test traversed all 81 screens. Eight official-source link addresses remain to be verified before final release. Live Google deployment testing is still required.
+Local validation: all 1,325 named Word references mapped, 21 backend tests passed, and the browser test traversed all 81 screens. Eight official-source link addresses remain to be verified before final release. Live Google deployment testing is still required.
+
+Navigation update: missing required answers are highlighted and brought into view. An incomplete office-details page stays on that page until all four required answers are supplied. The top stop buttons become available as the participant reaches those stops through Continue.
