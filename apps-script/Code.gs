@@ -189,7 +189,10 @@ function moduleState_(owner, revisions, fragments) {
     if (Number(r.version) !== state.version + 1) throw new Error('Response history needs secretariat attention.');
     const grouped = {};
     parts.filter(p => p.commitId === r.commitId).forEach(p => {
-      (grouped[p.questionId] ||= []).push(p);
+      if (!grouped[p.questionId]) {
+        grouped[p.questionId] = [];
+      }
+      grouped[p.questionId].push(p);
     });
     Object.keys(grouped).forEach(qid => {
       const sorted = grouped[qid].sort((a,b) => Number(a.partIndex) - Number(b.partIndex));

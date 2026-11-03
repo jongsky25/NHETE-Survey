@@ -35,3 +35,5 @@ Participants enter email, name and agency represented, then begin the module. Th
 Use **Secretariat sign-in** on the entry page for the protected Google administrator flow. Only administrator rows in the existing Roster need to remain active. Publicly typing an administrator email does not grant dashboard access.
 
 Under **Entry review**, Exclude removes an entry from agreement summaries, data-source follow-up and analytical exports without deleting it. Restore includes it again. **Export all entries (including excluded)** keeps all original answers with name, email, agency and review status. The profile and review sheets are created automatically.
+
+Syntax compatibility: the current Code.gs avoids the logical-assignment operator that caused an Apps Script parse error at line 192. All server .gs files were checked with an ES2020 parser, and the 30 backend tests pass.
