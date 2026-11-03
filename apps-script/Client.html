@@ -9,6 +9,8 @@
     return Array.isArray(v) ? v.some(x => condition.values.includes(x)) : condition.values.includes(v);
   }
   function relevant(q, answers, content) {
+    if (q.holder && !holds(answers[q.holder])) return false;
+    if (q.coverage && !coverageRegion(answers,content)) return false;
     if (q.unless && answers[q.unless] === true) return false;
     if (q.when && !matches(q.when, answers)) return false;
     if (q.alsoWhen && !matches(q.alsoWhen, answers)) return false;
@@ -20,9 +22,38 @@
     }
     return true;
   }
+  function holds(value) { return ['Yes, we keep it','We keep something close to it (please describe)'].includes(value); }
+  function coverageRegion(answers, content) {
+    const options=content.questions.find(q=>q.id==='0.4').options;
+    return options.slice(0,5).some(o=>o.text===answers['0.4']) ? answers['0.4'] : '';
+  }
+  function isRequired(q, answers) { return q.required || !!q.requiredAny?.some(c=>matches(c,answers)); }
+  function screenVisible(screen, answers, content) {
+    return !screen.id.startsWith('cp-') || content.indicators.some(i=>i.partsScreen===screen.id && holds(answers[i.code+'.q-k']));
+  }
+  function normalizeChanges(content, before, patch) {
+    const changes={...patch}, next={...before,...patch};
+    const clear=id=>{if(has(next[id]))changes[id]='';};
+    content.indicators.forEach(ind=>{
+      const id=ind.code+'.q-k';
+      if(Object.prototype.hasOwnProperty.call(patch,id) && !holds(patch[id])) {
+        Object.keys(next).filter(k=>k.startsWith(ind.code+':part')).forEach(clear);
+      }
+    });
+    // A changed scope requires a fresh coverage answer; do not reinterpret a saved number.
+    if(Object.prototype.hasOwnProperty.call(patch,'0.4') && patch['0.4']!==before['0.4']) {
+      content.questions.filter(q=>q.coverage && !Object.prototype.hasOwnProperty.call(patch,q.id)).forEach(q=>clear(q.id));
+    }
+    content.questions.filter(q=>q.id.endsWith(':SG.1')).forEach(q=>{
+      if(Object.prototype.hasOwnProperty.call(patch,q.id) && !holds(patch[q.id])) {
+        clear(q.id.replace(/SG\.1$/,'SG.2'));clear(q.id.replace(/SG\.1$/,'SG.3'));clear(q.id+':extra');
+      }
+    });
+    return changes;
+  }
   function valid(q, value) {
     if (!has(value)) return !q.required;
-    if (q.type === 'text') return typeof value === 'string' && words(value) <= 1500;
+    if (q.type === 'text') return typeof value === 'string' && (!q.required || !!value.trim()) && words(value) <= 1500;
     if (q.type === 'check' || q.type === 'toggle') return typeof value === 'boolean';
     const options = q.options.map(o => o.text);
     if (q.type === 'choice') return typeof value === 'string' && options.includes(value);
@@ -31,7 +62,7 @@
     return false;
   }
   function missing(content, answers, screen) {
-    return content.questions.filter(q => (!screen || q.screen === screen) && relevant(q, answers, content) && !valid(q, answers[q.id])).map(q => q.id);
+    return content.questions.filter(q => (!screen || q.screen === screen) && relevant(q, answers, content) && !valid({...q,required:isRequired(q,answers)}, answers[q.id])).map(q => q.id);
   }
   function noView(value) { return typeof value === 'string' && /^No view or opinion(?:\.|$)/u.test(value); }
   function tally(q, responses, content) {
@@ -55,7 +86,7 @@
     if (/^[\s]*[=+@-]/u.test(text) || /^[\t\r\n]/u.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   }
-  const api = {words, has, relevant, valid, missing, noView, tally, office, csvCell};
+  const api = {holds, coverageRegion, isRequired, screenVisible, normalizeChanges, words, has, relevant, valid, missing, noView, tally, office, csvCell};
   root.NheteRules = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -126,7 +157,7 @@
     return new Promise((resolve,reject) => google.script.run.withSuccessHandler(resolve).withFailureHandler(e => reject(new Error(e.message || 'Could not save. Please try again.')))[name](...args));
   }
   function persist() {
-    localStorage.setItem(storedKey,JSON.stringify({response:data.response,dirty,screen:currentScreen()?.id,furthest}));
+    localStorage.setItem(storedKey,JSON.stringify({response:data.response,dirty,screen:currentScreen()?.id,furthest,moduleVersion:content.version}));
   }
   function glossaryRow(term) {
     return content.glossary.find(row => {
@@ -137,7 +168,7 @@
   function glossary(term) {
     const row = glossaryRow(term); if (!row) return;
     const previous = document.activeElement, dialog=el('dialog',{'aria-label':term,class:'glossary-dialog'});
-    dialog.append(el('h2',{text:term}),rich(row,false),action('Close',() => dialog.close()));
+    dialog.append(el('h2',{text:term}),sourceText(row,'div'),action('Close',() => dialog.close()));
     dialog.addEventListener('close',() => {dialog.remove();previous?.focus();});
     document.body.append(dialog);dialog.showModal();
   }
@@ -223,8 +254,8 @@
   }
   function setAnswer(qid,value,redraw=false) {
     const view=redraw?captureView():null;
-    dirty[qid]=value;persist();status('Saving…');
-    if(rules.valid(qmap[qid],value)) {
+    dirty={...dirty,...rules.normalizeChanges(content,answers(),{[qid]:value})};persist();status('Saving…');
+    if(rules.valid({...qmap[qid],required:rules.isRequired(qmap[qid],answers())},value)) {
       const group=main.querySelector('[data-question-id="'+qid+'"]');
       group?.classList.remove('invalid-question');
       group?.querySelectorAll('[aria-invalid="true"]').forEach(node=>node.removeAttribute('aria-invalid'));
@@ -248,7 +279,7 @@
     if(busy) throw new Error('Please wait for the current save to finish.');
     if(!Object.keys(dirty).length && !options.advance && !options.submit && !retry)return true;
     if(!data.open)throw new Error('The module is closed.');
-    const invalid=Object.keys(dirty).filter(id=>!rules.valid({...qmap[id],required:false},dirty[id]));
+    const invalid=Object.keys(dirty).filter(id=>!qmap[id] || !rules.valid({...qmap[id],required:false},dirty[id]));
     if(invalid.length)throw new Error('Please keep each answer to 1,500 words or fewer.');
     busy=true;updateNavigation();
     try {
@@ -338,7 +369,7 @@
   }
   function grid(block) {
     const choices=qmap[block.rows[0]].options, red=block.ref==='s8-RF.grid';
-    const table=el('table',{class:'response-grid'},el('caption',{},rich(block.prompt)),el('thead',{},el('tr',{},el('th',{scope:'col',text:red?'Red flag':block.ref==='tor.grid'?'Part':'Code and ground rule'}),red?null:el('th',{scope:'col',text:block.ref==='tor.grid'?'What it says':'What it means, in plain words with an example'}),choices.map(o=>el('th',{scope:'col'},rich(o))),el('th',{scope:'col',text:qmap[qmap[block.rows[0]].comment].label.text}))));
+    const table=el('table',{class:'response-grid'},el('caption',{'data-source-ref':block.prompt.ref},rich(block.prompt)),el('thead',{},el('tr',{},el('th',{scope:'col',text:red?'Red flag':block.ref==='tor.grid'?'Part':'Code and ground rule'}),red?null:el('th',{scope:'col',text:block.ref==='tor.grid'?'What it says':'What it means, in plain words with an example'}),choices.map(o=>el('th',{scope:'col','data-source-ref':o.ref},rich(o))),el('th',{scope:'col','data-source-ref':qmap[qmap[block.rows[0]].comment].label.ref,text:qmap[qmap[block.rows[0]].comment].label.text}))));
     const tbody=el('tbody');
     block.rows.forEach(id=>{
       const q=qmap[id],value=answers()[id],comment=qmap[q.comment];
@@ -351,24 +382,107 @@
     });
     table.append(tbody);return el('div',{class:'table-wrap','data-scroll-key':block.ref},table);
   }
-  function supply(block) {
-    const indicator=currentScreen().id.replace('ind-','');
-    const section=el('section',{class:'supply','data-supply-indicator':indicator});
-    if(answers()[indicator+':notOurs'])return section;
-    block.introduction.forEach(row=>section.append(sourceText(row,row.kind.toLowerCase()==='heading'?'h2':'p',{class:row.kind.includes('note')?'note':row.kind.includes('Progress label')?'pill':''})));
-    block.parts.forEach(part=>{
-      const card=el('section',{class:'component'},el('h3',{text:part.name}));
-      part.questions.forEach(id=>{
-        const q=qmap[id];
-        if(rules.relevant(q,answers(),content)) {
-          if(q.region)card.append(el('h4',{text:q.region}));
-          card.append(field(q));
-        }
+  function template(ref) { return content.templateBindings[ref] || content.ui[ref]; }
+  function substituted(row,region) {
+    return {...row,text:row.text.replaceAll('[region]',region),paragraphs:row.paragraphs.map(p=>p.map(r=>({...r,text:r.text.replaceAll('[region]',region)})))};
+  }
+  function matrixField(q) {
+    const value=answers()[q.id], required=rules.isRequired(q,answers());
+    if(q.type==='text') {
+      const group=field(q,true), input=group.querySelector('textarea');
+      group.classList.add('matrix-question');group.prepend(sourceText(q.label,'div',{class:'matrix-label'}));
+      input.required=required;
+      let placeholders=[];
+      if(q.id.endsWith('.q-o')) {
+        const code=q.indicator;
+        if(answers()[code+'.q-c']===qmap[code+'.q-c']?.options[2].text)placeholders.push('D-mx.6');
+        if(answers()[code+'.q-w']===qmap[code+'.q-w'].options[7].text)placeholders.push('D-mx.7');
+        if(answers()[code+'.q-k']===qmap[code+'.q-k'].options[1].text)placeholders.push('D-mx.13');
+      } else placeholders.push('D-mx.14');
+      if(!placeholders.length)placeholders=['D-mx.11'];
+      input.placeholder=placeholders.map(ui).join(' ');input.dataset.placeholderRefs=placeholders.join(' ');
+      if(required)group.append(el('span',{class:'small',text:'Required'}));
+      return group;
+    }
+    const group=el('fieldset',{'data-question-id':q.id,class:'matrix-question',disabled:!data.open});
+    group.append(sourceText(q.label,'legend',{class:'matrix-label'}));
+    q.help?.forEach(r=>group.append(sourceText(r,'p',{class:'help matrix-mobile-help'})));
+    const select=el('select',{id:'answer-'+q.id,name:q.id,'aria-label':(q.indicator?q.indicator+' — ':'')+q.label.text,disabled:!data.open});
+    select.required=required;
+    select.append(el('option',{value:'',text:ui('D-mx.1'),'data-source-ref':'D-mx.1'}));
+    q.options.forEach(o=>select.append(el('option',{value:o.text,text:o.text,'data-source-ref':o.ref})));
+    select.value=value || '';select.onchange=()=>setAnswer(q.id,select.value,true);
+    if(q.shortOptions)group.append(el('div',{class:'short-select'},select,el('span',{'aria-hidden':'true',text:value?value.split('.')[0]:ui('D-mx.1')})));
+    else group.append(select);
+    if(q.extra && rules.relevant(qmap[q.extra],answers(),content))group.append(matrixField(qmap[q.extra]));
+    return group;
+  }
+  function matrixHeading(ref) {
+    const th=el('th',{scope:'col'},sourceText(template(ref),'span'));
+    const help=ref.endsWith('-label')?content.templateBindings[ref.replace('-label','-help')]:null;
+    if(help)th.append(sourceText(help,'p',{class:'help matrix-desktop-help'}));
+    return th;
+  }
+  function labelled(row,labelRef,label) {
+    const p=el('p');
+    if(labelRef)p.append(sourceText(content.ui[labelRef],'strong'),' ');
+    else if(label)p.append(el('strong',{text:label}),' ');
+    p.append(sourceText(row,'span'));return p;
+  }
+  function indicatorMatrix(block) {
+    const table=el('table',{class:'indicator-matrix'},el('thead',{},el('tr',{},['MX.h1','MX.h2','QT.v-label','QT.c-label','QT.w-label','QT.k-label','T.o'].map(matrixHeading))));
+    const tbody=el('tbody');
+    block.codes.forEach(code=>{
+      const ind=content.indicators.find(i=>i.code===code), rows=Object.fromEntries(ind.rows.map(r=>[r.ref,r]));
+      const tr=el('tr',{'data-indicator':code});
+      tr.append(el('th',{scope:'row',class:'matrix-code'},sourceText(rows[code+'.code'],'span')));
+      const detailsCell=el('td',{class:'indicator-details'},sourceText(rows[code+'.2'],'h2'),sourceText(rows[code+'.3']));
+      if(rows[code+'.7'])detailsCell.append(labelled(rows[code+'.7'],'D-mx.2'));
+      if(rows[code+'.8'])detailsCell.append(labelled(rows[code+'.8'],'D-mx.3'));
+      const details=el('details',{'data-view-key':'indicator:'+code},el('summary',{'data-source-ref':'D-mx.5',text:ui('D-mx.5')}));
+      ind.rows.filter(r=>r.kind.startsWith('More about') && !r.ref.includes('.ev')).forEach(r=>{
+        const labelRef=r.kind.includes('(D-mx.')?r.kind.match(/\((D-mx\.\d+)\)/)[1]:null;
+        const label=r.kind.endsWith('where it is used')?'Where it is used:':r.kind.endsWith('what it is made of')?'What it is made of:':null;
+        const node=labelled(r,labelRef,label);if(r.kind.includes('watch-out'))node.classList.add('note');details.append(node);
       });
-      const details=el('details',{'data-view-key':'supply:'+part.questions[0]},el('summary',{},rich(block.detailsLabel)));
-      part.details.forEach(id=>details.append(field(qmap[id])));card.append(details);section.append(card);
+      if(ind.research)details.append(research({...ind.research,key:code}));
+      detailsCell.append(details);tr.append(detailsCell);
+      ['v','c','w','k','o'].forEach(suffix=>{
+        const q=qmap[code+'.q-'+suffix];
+        tr.append(el('td',{class:'matrix-answer'},q?matrixField(q):el('div',{class:'not-needed'},sourceText(template('QT.c-label'),'div',{class:'matrix-label'}),sourceText(content.ui['D-mx.4'],'span'))));
+      });
+      tbody.append(tr);
     });
-    return section;
+    table.append(tbody);return el('div',{class:'table-wrap matrix-wrap','data-scroll-key':block.ref},table);
+  }
+  function partsMatrix(block) {
+    const region=rules.coverageRegion(answers(),content), national=region===qmap['0.4'].options[0].text;
+    const section=el('section',{class:'parts-section'});
+    ['s8g.2','s8g.3'].forEach(ref=>section.append(sourceText(template(ref),ref==='s8g.2'?'h1':'p')));
+    if(region)section.append(sourceText(substituted(template(national?'s8g.3n':'s8g.3r'),region)));
+    section.append(sourceText(template('s8g.4')));
+    const first=content.screens.find(s=>s.id.startsWith('cp-') && rules.screenVisible(s,answers(),content));
+    if(first?.id===currentScreen().id)section.append(sourceText(template('s8g.5'),'p',{class:'note'}));
+    const head=['CP.h1','CP.h2','QSG.1-label','QSG.2-label'];
+    const headings=head.map(matrixHeading);
+    if(region){const ref=national?'QSG.3n-label':'QSG.3-label';const h=matrixHeading(ref);h.firstChild.replaceWith(sourceText(substituted(template(ref),region),'span'));headings.push(h);}
+    const table=el('table',{class:'parts-matrix'},el('thead',{},el('tr',{},headings))),tbody=el('tbody');
+    block.codes.filter(code=>rules.holds(answers()[code+'.q-k'])).forEach(code=>{
+      const ind=content.indicators.find(i=>i.code===code);
+      ind.parts.forEach((part,i)=>{
+        const prefix=code+':part'+(i+1)+':';
+        const tr=el('tr',{'data-part':code+'.p'+(i+1)},el('th',{scope:'row',class:'matrix-code'},el('span',{},textWithGlossary(code,true)),el('div',{class:'small',text:ind.title})),el('td',{class:'part-name'},sourceText(part,'span')));
+        ['SG.1','SG.2',...(region?['SG.3']:[])].forEach(suffix=>{
+          let q=qmap[prefix+suffix];
+          if(suffix==='SG.3') {
+            const ref=national?'QSG.3n':'QSG.3';q={...q,label:substituted(template(ref+'-label'),region),help:[template(ref+'-help')]};
+          }
+          tr.append(el('td',{class:'matrix-answer'},rules.relevant(q,answers(),content)?matrixField(q):el('div',{class:'not-needed'},sourceText(q.label,'div',{class:'matrix-label'}),sourceText(content.ui['D-mx.12'],'span'))));
+        });
+        tbody.append(tr);
+      });
+    });
+    table.append(tbody);section.append(el('div',{class:'table-wrap matrix-wrap','data-scroll-key':block.ref},table));return section;
   }
   function renderBody(row) {
     const kind=row.kind.toLowerCase();
@@ -383,16 +497,17 @@
     return sourceText(row,'p',{class:kind.includes('note')?'note':kind.includes('small grey')?'help':''});
   }
   function research(block) {
-    const details=el('details',{class:'research','data-view-key':'research:'+currentScreen().id},el('summary',{text:ui('D-res.1')}),el('p',{class:'help',text:ui('D-res.2')}));
+    const details=el('details',{class:'research','data-view-key':'research:'+(block.key || currentScreen().id)},el('summary',{'data-source-ref':'D-res.1',text:ui('D-res.1')}),el('p',{class:'help','data-source-ref':'D-res.2',text:ui('D-res.2')}));
     block.entries.forEach(entry=>{
       const article=el('article',{class:'research-entry'},el('p',{class:'small',text:[entry.stance,entry.sourceType].filter(Boolean).join(' · ')}),sourceText(entry.row));
-      if(entry.url)article.append(el('a',{href:entry.url,target:'_blank',rel:'noopener noreferrer',text:ui('D-res.10')}));
+      if(entry.url)article.append(el('a',{href:entry.url,target:'_blank',rel:'noopener noreferrer','data-source-ref':'D-res.10',text:ui('D-res.10')}));
       if(entry.access && !entry.access.includes('not checked'))article.append(el('p',{class:'small',text:/free to read/i.test(entry.access)?ui('D-res.11'):/subscription/i.test(entry.access)?ui('D-res.12'):entry.access}));
       details.append(article);
     });
-    details.append(el('p',{class:'small',text:ui('D-res.13')}));return details;
+    details.append(el('p',{class:'small','data-source-ref':'D-res.13',text:ui('D-res.13')}));return details;
   }
   async function go(index,back=false) {
+    while(index>=0 && index<content.screens.length && !rules.screenVisible(content.screens[index],answers(),content))index+=back?-1:1;
     if(index<0 || index>=content.screens.length)return;
     const missing=!back?rules.missing(content,answers(),currentScreen().id):[];
     if(missing.length){showMissing(missing);return;}
@@ -412,33 +527,34 @@
     const nav=el('nav',{class:'section-nav','aria-label':'Module stops'});
     content.stops.forEach(stop=>{
       const index=content.screens.findIndex(s=>s.stop===stop.id);
-      nav.append(action(stop.name,()=>go(index,true),{disabled:index>furthest,'aria-current':screen.stop===stop.id?'step':'false'}));
+      nav.append(action(stop.name,()=>go(index,true),{disabled:index>furthest,'aria-current':screen.stop===stop.id?'step':'false','data-source-ref':stop.sourceRef}));
     });
     if(data.differentDevice && !sessionStorage.getItem('nhete-device-notice')) {
       main.append(el('p',{class:'note',text:ui('D-nav.6')}));sessionStorage.setItem('nhete-device-notice','shown');
     }
     main.append(nav);
-    const card=el('section',{class:'card module-screen','data-screen-id':screen.id});
+    const card=el('section',{class:'card module-screen'+(screen.id.startsWith('mx-')||screen.id.startsWith('cp-')?' matrix-screen':''),'data-screen-id':screen.id});
     screen.blocks.forEach(block=>{
       if(block.type==='body')card.append(renderBody(block.row));
       else if(block.type==='question') {
         const q=qmap[block.id];if(rules.relevant(q,answers(),content))card.append(field(q));
       } else if(block.type==='grid')card.append(grid(block));
-      else if(block.type==='supply')card.append(supply(block));
+      else if(block.type==='indicatorMatrix')card.append(indicatorMatrix(block));
+      else if(block.type==='partsMatrix')card.append(partsMatrix(block));
       else if(block.type==='research')card.append(research(block));
       else if(block.type==='advice' && rules.has(answers()[block.after])) {
         const box=el('div',{class:'advice-control','data-view-key':'advice:'+block.row.ref});
-        box.append(action(ui('D-adv.1'),()=>{adviceOpen.add(block.row.ref);redrawInPlace();}));
-        if(adviceOpen.has(block.row.ref))box.append(el('div',{class:'advice'},el('p',{class:'small',text:ui('D-adv.2')}),sourceText(block.row)));
+        box.append(action(ui('D-adv.1'),()=>{adviceOpen.add(block.row.ref);redrawInPlace();},{'data-source-ref':'D-adv.1'}));
+        if(adviceOpen.has(block.row.ref))box.append(el('div',{class:'advice'},el('p',{class:'small','data-source-ref':'D-adv.2',text:ui('D-adv.2')}),sourceText(block.row)));
         card.append(box);
       }
     });
     main.append(card);
     if(screen.id!=='end1') {
       const submit=screen.blocks.find(b=>b.type==='submit');
-      main.append(el('div',{class:'page-actions'},action(ui('D-nav.2'),()=>go(screenIndex-1,true),{disabled:screenIndex===0}),el('span',{class:'spacer'}),
-        action(submit?.row.text || ui('D-nav.1'),()=>go(screenIndex+1),{id:'next',class:'btn'})));
-    } else main.append(action('Exit module',leaveModule));
+      main.append(el('div',{class:'page-actions'},action(ui('D-nav.2'),()=>go(screenIndex-1,true),{disabled:screenIndex===0,'data-source-ref':'D-nav.2'}),el('span',{class:'spacer'}),
+        action(submit?.row.text || ui('D-nav.1'),()=>go(screenIndex+1),{id:'next',class:'btn','data-source-ref':submit?.row.ref || 'D-nav.1'})));
+    } else {main.append(sourceText(content.ui['D-end.1'],'p',{role:'status'}),action('Exit module',leaveModule));}
     document.getElementById('signout').hidden=false;
     document.getElementById('signout').textContent=data.person.admin?'Secretariat':'Exit module';
     document.getElementById('signout').onclick=()=> (data.person.admin?showAdmin():leaveModule()).catch(e=>notice(e.message,true));
@@ -473,19 +589,20 @@
     main.append(el('h2',{text:'Agreement summaries'}),table(['Reference','Question','With a view','Most common','Agreement','Route','Counts'],rows));
     const dataRows=content.indicators.map(ind=>{
       const relevant=included.filter(r=>r.status==='submitted');
-      const notOurs=relevant.filter(r=>r.answers[ind.code+':notOurs']).map(rules.office);
-      const holders=relevant.filter(r=>Object.entries(r.answers).some(([id,value])=>id.startsWith(ind.code+':part') && id.endsWith(':SG.1') && ['Yes, we keep it','We keep something close to it (please describe)'].includes(value))).map(rules.office);
-      return [ind.code,ind.title,[...new Set(holders)].join('; '),[...new Set(notOurs)].join('; '),holders.length?'Custodian reported':'BLHSD follow-up: no confirmed custodian'];
+      const notOurs=relevant.filter(r=>r.answers[ind.code+'.q-k']==='No, we do not keep it').map(rules.office);
+      const unsure=relevant.filter(r=>r.answers[ind.code+'.q-k']==='I do not know').map(rules.office);
+      const holders=relevant.filter(r=>rules.holds(r.answers[ind.code+'.q-k'])).map(rules.office);
+      return [ind.code,ind.title,[...new Set(holders)].join('; '),[...new Set(notOurs)].join('; '),[...new Set(unsure)].join('; '),holders.length?'Custodian reported':'BLHSD follow-up: no confirmed custodian'];
     });
-    main.append(el('h2',{text:'Data custodians and follow-up'}),table(['Indicator','Title','Offices reporting data','Offices reporting not ours','Follow-up'],dataRows));
-    const exportResponses=list=>[['Response ID','Name','Email','Agency represented','Office','Status','Included','Review reason','Saved at',...content.questions.map(q=>q.id)]].concat(list.map(r=>[
+    main.append(el('h2',{text:'Data custodians and follow-up'}),table(['Indicator','Title','Offices reporting data','Offices reporting not ours','Possibly held / unsure','Follow-up'],dataRows));
+    const exportResponses=(list,archive=false)=>[['Response ID','Name','Email','Agency represented','Office','Status','Included','Review reason','Saved at',...content.questions.map(q=>q.id),...(archive?['All stored answers JSON','Revision history JSON']:[])]].concat(list.map(r=>[
       r.owner,r.entry?.name || '',r.entry?.email || '',r.entry?.agency || '',rules.office(r),r.status,r.review?.included!==false?'Yes':'No',r.review?.reason || '',r.savedAt,
-      ...content.questions.map(q=>rules.relevant(q,r.answers,content)?r.answers[q.id] ?? '':'')]));
+      ...content.questions.map(q=>rules.relevant(q,r.answers,content)?r.answers[q.id] ?? '':''),...(archive?[r.answers,r.history || []]:[])]));
     main.append(action('Export included responses',()=>download('NHETE-November-responses.csv',exportResponses(included))),
-      action('Export all entries (including excluded)',()=>download('NHETE-November-all-entries.csv',exportResponses(result.responses))),
+      action('Export all entries (including excluded)',()=>download('NHETE-November-all-entries.csv',exportResponses(result.responses,true))),
       action('Export component availability',()=>download('NHETE-November-component-availability.csv',
         [['Agency','Status','Indicator','Component','Question','Region','Answer']].concat(included.flatMap(r=>content.questions.filter(q=>q.indicator && rules.relevant(q,r.answers,content)).map(q=>[rules.office(r),r.status,q.indicator,q.component,q.id,q.region || '',r.answers[q.id] ?? '']))))),
-      action('Export BLHSD follow-up',()=>download('NHETE-November-BLHSD-follow-up.csv',[['Indicator','Title','Offices reporting data','Not ours','Follow-up'],...dataRows])));
+      action('Export BLHSD follow-up',()=>download('NHETE-November-BLHSD-follow-up.csv',[['Indicator','Title','Offices reporting data','Not ours','Possibly held / unsure','Follow-up'],...dataRows])));
     const comments=[];
     included.forEach(r=>content.questions.filter(q=>q.type==='text' && rules.relevant(q,r.answers,content) && r.answers[q.id]).forEach(q=>comments.push([rules.office(r),r.status,q.id,r.answers[q.id]])));
     main.append(el('h2',{text:'Office-attributed comments'}),table(['Office','Status','Reference','Answer'],comments));
@@ -498,14 +615,17 @@
   }
   async function load() {
     dirty={};furthest=0;retry=null;conflict=false;
-    data=await rpc('bootstrap',token,device);content=data.content;qmap=Object.fromEntries(content.questions.map(q=>[q.id,q]));
-    storedKey='nhete:'+content.version+':'+data.response.owner;
+    data=await rpc('bootstrap',token,device);content=data.content;qmap=Object.fromEntries([...(content.legacyQuestions || []),...content.questions].map(q=>[q.id,q]));
+    storedKey='nhete:'+(content.storageVersion || content.version)+':'+data.response.owner;
     const saved=JSON.parse(localStorage.getItem(storedKey) || 'null');
     if(saved) {
       dirty=saved.dirty || {};furthest=saved.furthest || 0;
-      const index=content.screens.findIndex(s=>s.id===saved.screen);screenIndex=Math.max(0,index);
+      const resume=content.legacyScreenMap[saved.screen] || saved.screen;
+      const index=content.screens.findIndex(s=>s.id===resume);screenIndex=Math.max(0,index);
+      if(saved.moduleVersion!==content.version)furthest=screenIndex;
       if(saved.response.version!==data.response.version && Object.keys(dirty).length){showConflict(data.response);return;}
-    } else screenIndex=0;
+    } else screenIndex=Math.max(0,content.screens.findIndex(s=>s.id===(content.legacyScreenMap[data.response.screen] || data.response.screen)));
+    if(!rules.screenVisible(currentScreen(),answers(),content))screenIndex=Math.max(0,screenIndex-1);
     if(data.person.entry && data.response.version===0 && !rules.has(answers()['0.1'])) {
       const agency=data.person.entry.agency;
       const option=qmap['0.1'].options.find(o=>o.text.toLowerCase()===agency.toLowerCase());
@@ -570,7 +690,8 @@
     }
     if(name==='saveAnswers') {
       const r=args[1];if(r.expectedVersion!==demoResponse.version)return {ok:false,conflict:true,response:structuredClone(demoResponse)};
-      const next={...demoResponse.answers,...r.changes};
+      const patch=rules.normalizeChanges(content,demoResponse.answers,r.changes);
+      const next={...demoResponse.answers,...patch};
       const missing=rules.missing(content,next,r.submit?null:r.validateScreen || '__none__');if(missing.length)return {ok:false,missing};
       demoResponse={owner:'demonstration',version:demoResponse.version+1,status:r.submit?'submitted':Object.keys(r.changes).length?'draft':demoResponse.status,answers:next,savedAt:new Date().toISOString(),screen:r.screen};
       localStorage.setItem('nhete-demo:'+device,JSON.stringify(demoResponse));return {ok:true,response:structuredClone(demoResponse)};

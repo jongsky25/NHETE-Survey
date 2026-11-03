@@ -29,7 +29,7 @@ styles = (source / 'Styles.html').read_text()
 styles = styles[styles.index('<style>') + len('<style>'):styles.rindex('</style>')].strip('\n') + '\n'
 packed = re.search(r"base64Decode\('([^']+)'\)", (source / 'Content.gs').read_text()).group(1)
 content = json.loads(gzip.decompress(base64.b64decode(packed)))
-assert len(content['screens']) == 81 and len(content['indicators']) == 35
+assert len(content['indicators']) == 35 and content['screens']
 index = (source / 'Index.html').read_text()
 index = index.replace('<?!= HtmlService.createHtmlOutputFromFile("Styles").getContent(); ?>', '<link rel="stylesheet" href="app.css">')
 index = index.replace('<?!= HtmlService.createHtmlOutputFromFile("Client").getContent(); ?>', '<script src="domain.js"></script>\n<script src="app.js"></script>')

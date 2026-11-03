@@ -1,2 +1,9 @@
 dev-content.js
 nhete-content.json
+node_modules/
+development/content.json
+development/apps-script/
+development/RECOVERED-SOURCES.md
+tests/*.png
+tests/rendered-refs.json
+__pycache__/

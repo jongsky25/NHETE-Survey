@@ -1,43 +1,25 @@
-# Copy these files into Google Apps Script
+# Update the existing Google Apps Script app
 
-Open a file below, choose **Raw**, then press **Ctrl+A → Ctrl+C**. In the matching Apps Script file, press **Ctrl+A → Ctrl+V** and save. Copy the whole file.
+This is the **November 3 Word module**, including domain tables, parts tables and the scroll-position fix.
 
-| File | Direct copy link | Apps Script file |
-|---|---|---|
-| Code.gs | [Open code](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Code.gs) | Script named Code |
-| Content.gs | [Open full module content](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Content.gs) | Script named Content |
-| Rules.gs | [Open shared rules](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Rules.gs) | Optional; existing copies may stay |
-| Index.html | [Open HTML](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Index.html) | HTML named Index |
-| Client.html | [Open client code](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Client.html) | HTML named Client |
-| Styles.html | [Open styles](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Styles.html) | HTML named Styles |
-| appsscript.json | [Open manifest](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/appsscript.json) | Existing manifest |
+Replace these **four existing files together**. Open each Raw link, select all and copy; select all in the matching Apps Script file and paste the complete content.
 
-Add a missing Script or HTML file with **+** beside Files. Enter only the name (for example, Rules or Index); Apps Script adds the extension. The HTML names are case-sensitive.
+| File | Direct GitHub Raw link |
+|---|---|
+| Code.gs | [Copy Code.gs](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Code.gs) |
+| Content.gs | [Copy Content.gs](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Content.gs) |
+| Client.html | [Copy Client.html](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Client.html) |
+| Styles.html | [Copy Styles.html](https://raw.githubusercontent.com/jongsky25/NHETE-Survey/main/apps-script/Styles.html) |
 
-Content.gs contains the complete November module and embedded diagrams as compressed text. The long encoded line is expected. It does **not** require uploading a data file to Google Drive or adding Drive permissions.
+1. Save all four files. Content.gs contains a long encoded line; copy the whole file.
+2. Select **Deploy → Manage deployments → pencil → Version: New version → Deploy**.
+3. Reopen the existing app URL. Stop 8 should show domain tables on a wide screen and compact indicator blocks on a phone.
+4. Check answer selection around F06–F08 and inside the new tables, and confirm your earlier response resumes on the original device.
 
-After updating all files, select **Deploy → Manage deployments → pencil → New version → Deploy**. Keep the existing deployment URL, spreadsheet ID and OAuth settings. Do not rerun spreadsheet setup; the November sheets initialize automatically during entry or administrator access. Existing October response sheets are preserved.
+Keep the existing deployment URL, spreadsheet, Script Properties, OAuth settings, Index.html and manifest. An existing Rules.gs can stay; Code.gs contains its own rules. Do not rerun setup, clear browser storage or create a new spreadsheet. No new permissions are needed.
 
-This is the November 2 Word-based test build: 10 stops, 81 screens and 35 indicator cards, with the approved C13 = 3 and D13 = 2 data components. Resume is device-specific and reports are attributed to offices. The source closing date is November 17, 2026 at 11:59 PM Manila time.
+GitHub publication does not deploy the Google app. Live deployment still needs the owner to perform these steps.
 
-Local validation: all 1,325 named Word references mapped, 33 backend tests passed, and the browser test traversed all 81 screens. Eight official-source link addresses remain to be verified before final release. Live Google deployment testing is still required.
+## What was checked
 
-Navigation update: missing required answers are highlighted and brought into view. An incomplete office-details page stays on that page until all four required answers are supplied. The top stop buttons become available as the participant reaches those stops through Continue.
-
-Server-rule fix: the current Code.gs contains its own validation rules. If an older deployment reports `NheteRules is not defined`, replace **Code.gs only**, save, then deploy a new version of the existing deployment. The server no longer relies on a separate Rules.gs file.
-
-## Open entry and review update
-
-Replace **Code.gs, Content.gs and Client.html**, save, and deploy a new version. Keep Execute as Me and Who has access Anyone. No new permissions or participant activation are required.
-
-Participants enter email, name and agency represented, then begin the module. These details are self-reported, and the introductory disclosure reflects their collection. The agency is pre-filled in the questionnaire. Responses resume on the original device.
-
-Use **Secretariat sign-in** on the entry page for the protected Google administrator flow. Only administrator rows in the existing Roster need to remain active. Publicly typing an administrator email does not grant dashboard access.
-
-Under **Entry review**, Exclude removes an entry from agreement summaries, data-source follow-up and analytical exports without deleting it. Restore includes it again. **Export all entries (including excluded)** keeps all original answers with name, email, agency and review status. The profile and review sheets are created automatically.
-
-Syntax compatibility: the current Code.gs avoids the logical-assignment operator that caused an Apps Script parse error at line 192. All server .gs files were checked with an ES2020 parser, and the 33 backend tests pass.
-
-Consent storage fix: update Code.gs to preserve decimal-looking question IDs as text. Historical consent answers stored under numeric 0 are read back as question 0.0 without rewriting the archive. An unchecked or missing answer is never converted into agreement. This fix requires only Code.gs to be replaced and redeployed.
-
-Scroll-position fix: replace **Client.html only**, save, and deploy a new version to prevent answer selections from resetting the ground-rule table. Both table scroll directions, the current control and expanded research/data-detail panels are preserved. Verified with mobile touch selections on F07, conditional comments, retained text, and the public-entry/review browser test.
+[Source audit and test results](../AUDIT.md): all 1,158 named Word references mapped; the two approved identity disclosures retained; three diagrams preserved exactly; 35 indicators and 74 parts; all 50 possible screens rendered and traversed; backend and browser behavior tested using fabricated responses and a mock Sheets service. Existing response identifiers, sheets and historical answers are preserved.

@@ -1,5 +1,6 @@
 // BEGIN EMBEDDED SERVER RULES
 const NHETE_SERVER_RULES_ = (function () {
+  'use strict';
   function words(value) { return String(value || '').match(/\S+/gu)?.length || 0; }
   function has(value) { return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== '' && value !== false; }
   function matches(condition, answers) {
@@ -7,6 +8,8 @@ const NHETE_SERVER_RULES_ = (function () {
     return Array.isArray(v) ? v.some(x => condition.values.includes(x)) : condition.values.includes(v);
   }
   function relevant(q, answers, content) {
+    if (q.holder && !holds(answers[q.holder])) return false;
+    if (q.coverage && !coverageRegion(answers,content)) return false;
     if (q.unless && answers[q.unless] === true) return false;
     if (q.when && !matches(q.when, answers)) return false;
     if (q.alsoWhen && !matches(q.alsoWhen, answers)) return false;
@@ -18,9 +21,38 @@ const NHETE_SERVER_RULES_ = (function () {
     }
     return true;
   }
+  function holds(value) { return ['Yes, we keep it','We keep something close to it (please describe)'].includes(value); }
+  function coverageRegion(answers, content) {
+    const options=content.questions.find(q=>q.id==='0.4').options;
+    return options.slice(0,5).some(o=>o.text===answers['0.4']) ? answers['0.4'] : '';
+  }
+  function isRequired(q, answers) { return q.required || !!q.requiredAny?.some(c=>matches(c,answers)); }
+  function screenVisible(screen, answers, content) {
+    return !screen.id.startsWith('cp-') || content.indicators.some(i=>i.partsScreen===screen.id && holds(answers[i.code+'.q-k']));
+  }
+  function normalizeChanges(content, before, patch) {
+    const changes={...patch}, next={...before,...patch};
+    const clear=id=>{if(has(next[id]))changes[id]='';};
+    content.indicators.forEach(ind=>{
+      const id=ind.code+'.q-k';
+      if(Object.prototype.hasOwnProperty.call(patch,id) && !holds(patch[id])) {
+        Object.keys(next).filter(k=>k.startsWith(ind.code+':part')).forEach(clear);
+      }
+    });
+    // A changed scope requires a fresh coverage answer; do not reinterpret a saved number.
+    if(Object.prototype.hasOwnProperty.call(patch,'0.4') && patch['0.4']!==before['0.4']) {
+      content.questions.filter(q=>q.coverage && !Object.prototype.hasOwnProperty.call(patch,q.id)).forEach(q=>clear(q.id));
+    }
+    content.questions.filter(q=>q.id.endsWith(':SG.1')).forEach(q=>{
+      if(Object.prototype.hasOwnProperty.call(patch,q.id) && !holds(patch[q.id])) {
+        clear(q.id.replace(/SG\.1$/,'SG.2'));clear(q.id.replace(/SG\.1$/,'SG.3'));clear(q.id+':extra');
+      }
+    });
+    return changes;
+  }
   function valid(q, value) {
     if (!has(value)) return !q.required;
-    if (q.type === 'text') return typeof value === 'string' && words(value) <= 1500;
+    if (q.type === 'text') return typeof value === 'string' && (!q.required || !!value.trim()) && words(value) <= 1500;
     if (q.type === 'check' || q.type === 'toggle') return typeof value === 'boolean';
     const options = q.options.map(o => o.text);
     if (q.type === 'choice') return typeof value === 'string' && options.includes(value);
@@ -29,7 +61,7 @@ const NHETE_SERVER_RULES_ = (function () {
     return false;
   }
   function missing(content, answers, screen) {
-    return content.questions.filter(q => (!screen || q.screen === screen) && relevant(q, answers, content) && !valid(q, answers[q.id])).map(q => q.id);
+    return content.questions.filter(q => (!screen || q.screen === screen) && relevant(q, answers, content) && !valid({...q,required:isRequired(q,answers)}, answers[q.id])).map(q => q.id);
   }
   function noView(value) { return typeof value === 'string' && /^No view or opinion(?:\.|$)/u.test(value); }
   function tally(q, responses, content) {
@@ -53,7 +85,7 @@ const NHETE_SERVER_RULES_ = (function () {
     if (/^[\s]*[=+@-]/u.test(text) || /^[\t\r\n]/u.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   }
-  const api = {words, has, relevant, valid, missing, noView, tally, office, csvCell};
+  const api = {holds, coverageRegion, isRequired, screenVisible, normalizeChanges, words, has, relevant, valid, missing, noView, tally, office, csvCell};
   return api;
 })();
 // END EMBEDDED SERVER RULES
@@ -179,7 +211,7 @@ function participant_(token, device) {
 }
 function owner_(person, device) {
   if (typeof device !== 'string' || !/^[a-zA-Z0-9-]{32,100}$/.test(device)) throw new Error('Please use the device where you started.');
-  return hash_(person.publicEntry ? content_().version + ':entry:' + person.entryId : content_().version + ':' + person.email + ':' + device);
+  return hash_(person.publicEntry ? (content_().storageVersion || content_().version) + ':entry:' + person.entryId : (content_().storageVersion || content_().version) + ':' + person.email + ':' + device);
 }
 function storedQuestionId_(raw, numericIds) {
   let id = String(raw);
@@ -196,8 +228,9 @@ function storedQuestionId_(raw, numericIds) {
   }
   return id;
 }
-function moduleState_(owner, revisions, fragments) {
+function moduleState_(owner, revisions, fragments, includeHistory) {
   const state = {owner, version: 0, status: 'not started', answers: {}, savedAt: '', screen: 'welcome'};
+  if(includeHistory)state.history=[];
   const history = (revisions || moduleRows_('Module20261102Revisions')).filter(r => r.owner === owner);
   const parts = (fragments || moduleRows_('Module20261102Changes')).filter(r => r.owner === owner);
   const numericIds = {};
@@ -218,18 +251,21 @@ function moduleState_(owner, revisions, fragments) {
       }
       grouped[questionId].push(p);
     });
+    const revisionChanges={};
     Object.keys(grouped).forEach(qid => {
       const sorted = grouped[qid].sort((a,b) => Number(a.partIndex) - Number(b.partIndex));
       sorted.forEach((p,i) => { if (Number(p.partIndex) !== i) throw new Error('Incomplete answer record.'); });
       state.answers[qid] = JSON.parse(sorted.map(p => JSON.parse(p.fragment)).join(''));
+      revisionChanges[qid]=state.answers[qid];
     });
+    if(includeHistory)state.history.push({version:Number(r.version),savedAt:String(r.savedAt),status:r.status,changes:revisionChanges});
     state.version = Number(r.version); state.status = r.status; state.savedAt = String(r.savedAt); state.screen = String(r.screen);
   });
   return state;
 }
 function validateChanges_(changes) {
   if (!changes || Object.prototype.toString.call(changes) !== '[object Object]') throw new Error('Invalid answers.');
-  const questions = Object.fromEntries(content_().questions.map(q => [q.id,q]));
+  const questions = Object.fromEntries([...(content_().legacyQuestions || []),...content_().questions].map(q => [q.id,q]));
   const cleaned = {};
   Object.keys(changes).forEach(id => {
     if (!questions[id]) throw new Error('Unknown question.');
@@ -267,6 +303,7 @@ function saveAnswers(token, request) {
     if (history.some(r => r.owner === owner && r.requestId === request.requestId)) return {ok: true,response: state};
     writable_();
     if (Number(request.expectedVersion) !== state.version) return {ok: false,conflict: true,response: state};
+    Object.assign(changes,NHETE_SERVER_RULES_.normalizeChanges(content_(),state.answers,changes));
     const answers = Object.assign({},state.answers,changes);
     const missing = NHETE_SERVER_RULES_.missing(content_(),answers,request.submit ? null : request.validateScreen || '__no_validation__');
     if (missing.length) return {ok:false,missing};
@@ -290,10 +327,10 @@ function adminData(token) {
   locked_(ensureModule_);
   const revisions = moduleRows_('Module20261102Revisions'), fragments = moduleRows_('Module20261102Changes');
   const entries = moduleRows_('Module20261102Entries'), reviews = moduleRows_('Module20261102Reviews');
-  const entryOwners = Object.fromEntries(entries.map(e => [hash_(content_().version+':entry:'+e.entryId),JSON.parse(e.profile)]));
+  const entryOwners = Object.fromEntries(entries.map(e => [hash_((content_().storageVersion || content_().version)+':entry:'+e.entryId),JSON.parse(e.profile)]));
   const owners = [...new Set([...revisions.map(r => r.owner),...Object.keys(entryOwners)])];
   return {responses: owners.map(owner => {
-    const state = moduleState_(owner,revisions,fragments);
+    const state = moduleState_(owner,revisions,fragments,true);
     const review = reviews.filter(r => r.owner === owner).pop();
     return {...state,entry:entryOwners[owner] || null,review:review ? {included:truth_(review.included),reason:JSON.parse(review.reason),reviewedAt:String(review.reviewedAt)} : {included:true,reason:'',reviewedAt:''}};
   }), decisions: moduleRows_('Module20261102Decisions')};
@@ -305,7 +342,7 @@ function setEntryReview(token, input) {
   if (NHETE_SERVER_RULES_.words(reason)>1500) throw new Error('Keep the review reason to 1,500 words or fewer.');
   return locked_(() => {
     ensureModule_();
-    const exists = moduleRows_('Module20261102Revisions').some(r => r.owner === input.owner) || moduleRows_('Module20261102Entries').some(e => hash_(content_().version+':entry:'+e.entryId) === input.owner);
+    const exists = moduleRows_('Module20261102Revisions').some(r => r.owner === input.owner) || moduleRows_('Module20261102Entries').some(e => hash_((content_().storageVersion || content_().version)+':entry:'+e.entryId) === input.owner);
     if (!exists) throw new Error('Entry not found.');
     sheet_('Module20261102Reviews').appendRow([input.owner,input.included,JSON.stringify(reason),actor.email,new Date().toISOString()]);
     return {ok:true};

@@ -289,5 +289,47 @@ figure { margin: 24px 0; }
 .invalid-question { outline: 2px solid var(--err-ink); outline-offset: 8px; border-radius: 8px; scroll-margin-top: 130px; }
 .question-error { color: var(--err-ink); background: var(--err-bg); padding: 12px; border-radius: 10px; }
 #notice { scroll-margin-top: 130px; }
+/* Word v20261103: domain matrices and compact mobile rows. */
+.matrix-screen { max-width: none; min-width: 0; }
+.matrix-wrap { width: 100%; max-width: 100%; overscroll-behavior: contain; }
+.matrix-wrap table { border-collapse: separate; border-spacing: 0; table-layout: fixed; }
+.indicator-matrix { min-width: 1850px; }
+.parts-matrix { min-width: 1100px; }
+.matrix-wrap thead th { z-index: 3; }
+.matrix-wrap .matrix-code { position: sticky; left: 0; top: auto; z-index: 2; width: 100px; background: var(--card); }
+.matrix-wrap thead th:first-child { left: 0; z-index: 4; width: 100px; }
+.indicator-matrix thead th:nth-child(2) { width: 390px; }
+.matrix-wrap th, .matrix-wrap td { border-right: 1px solid var(--line); }
+.indicator-details h2 { font-size: 20px; margin: 0 0 12px; }
+.indicator-details p, .matrix-wrap .help { margin-bottom: 12px; }
+.indicator-details details { margin: 12px 0 0; }
+.matrix-question select { width: 100%; min-width: 0; font: inherit; min-height: 48px; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.matrix-question textarea { width: 100%; font: inherit; }
+.matrix-question .matrix-label, .matrix-mobile-help { display: none; }
+.matrix-question .matrix-question { margin-top: 12px; }
+.short-select { position: relative; }
+.short-select select { color: transparent; }
+.short-select option { color: var(--ink); background: var(--card); }
+.short-select > span { position: absolute; pointer-events: none; left: 12px; right: 24px; top: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.not-needed { color: var(--muted); background: var(--soft); padding: 10px; }
+.matrix-wrap .invalid-question { outline-offset: 0; }
+.parts-matrix .matrix-code { width: 160px; }
+@media (max-width: 899px) {
+  .matrix-wrap { overflow: visible; max-height: none; }
+  .matrix-wrap table, .matrix-wrap tbody, .matrix-wrap tr, .matrix-wrap td, .matrix-wrap th { display: block; width: 100%; min-width: 0; }
+  .matrix-wrap thead { display: none; }
+  .matrix-wrap table { table-layout: auto; }
+  .matrix-wrap tr { border: 1px solid var(--line); border-radius: 12px; margin: 0 0 22px; padding: 12px; }
+  .matrix-wrap .matrix-code { position: static; width: 100%; border: 0; padding-bottom: 0; }
+  .matrix-wrap td { border: 0; padding: 10px; }
+  .matrix-question .matrix-label, .not-needed .matrix-label { display: block; font-weight: 600; margin-bottom: 8px; }
+  .matrix-mobile-help { display: block; }
+  .matrix-desktop-help { display: none; }
+  .matrix-screen { padding: 20px 12px; }
+  .matrix-wrap p, .matrix-wrap span, .matrix-wrap legend { overflow-wrap: anywhere; }
+  .matrix-wrap .short-select > span { overflow-wrap: normal; }
+  .part-name { font-weight: 600; }
+}
+.short-select::after { content: '▾'; position: absolute; right: 10px; top: 12px; color: var(--ink); pointer-events: none; }
 
 </style>
