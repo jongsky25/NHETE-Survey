@@ -1,3 +1,63 @@
+// BEGIN EMBEDDED SERVER RULES
+const NHETE_SERVER_RULES_ = (function () {
+  function words(value) { return String(value || '').match(/\S+/gu)?.length || 0; }
+  function has(value) { return Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== '' && value !== false; }
+  function matches(condition, answers) {
+    const v = answers[condition.question];
+    return Array.isArray(v) ? v.some(x => condition.values.includes(x)) : condition.values.includes(v);
+  }
+  function relevant(q, answers, content) {
+    if (q.unless && answers[q.unless] === true) return false;
+    if (q.when && !matches(q.when, answers)) return false;
+    if (q.alsoWhen && !matches(q.alsoWhen, answers)) return false;
+    if (q.whenChoiceRefs) {
+      const parent = content.questions.find(p => p.id === q.whenChoiceRefs.question);
+      const allowed = parent.options.filter(o => q.whenChoiceRefs.refs.includes(o.ref)).map(o => o.text);
+      if (!matches({question: parent.id, values: allowed}, answers)) return false;
+      return relevant(parent, answers, content);
+    }
+    return true;
+  }
+  function valid(q, value) {
+    if (!has(value)) return !q.required;
+    if (q.type === 'text') return typeof value === 'string' && words(value) <= 1500;
+    if (q.type === 'check' || q.type === 'toggle') return typeof value === 'boolean';
+    const options = q.options.map(o => o.text);
+    if (q.type === 'choice') return typeof value === 'string' && options.includes(value);
+    if (q.type === 'multi') return Array.isArray(value) && new Set(value).size === value.length && value.every(v => options.includes(v)) &&
+      (!q.maxChoices || value.length <= q.maxChoices) && !(value.length > 1 && value.some(noView));
+    return false;
+  }
+  function missing(content, answers, screen) {
+    return content.questions.filter(q => (!screen || q.screen === screen) && relevant(q, answers, content) && !valid(q, answers[q.id])).map(q => q.id);
+  }
+  function noView(value) { return typeof value === 'string' && /^No view or opinion(?:\.|$)/u.test(value); }
+  function tally(q, responses, content) {
+    const counts = {}; let n = 0;
+    responses.filter(p => p.status === 'submitted').forEach(p => {
+      const value = p.answers[q.id];
+      if (!relevant(q, p.answers, content) || !has(value) || noView(value) || Array.isArray(value) && value.some(noView)) return;
+      n++;
+      (Array.isArray(value) ? value : [String(value)]).forEach(v => { counts[v] = (counts[v] || 0) + 1; });
+    });
+    const max = Math.max(0, ...Object.values(counts));
+    const modes = Object.keys(counts).filter(k => counts[k] === max);
+    const agreement = n ? max / n : 0;
+    return {counts, n, modes, agreement, shortlist: n >= 6 && agreement >= .75};
+  }
+  function office(response) {
+    return response.answers['0.1'] === 'Other (specify)' ? response.answers['0.1:extra'] || 'Other (specify)' : response.answers['0.1'] || '';
+  }
+  function csvCell(value) {
+    let text = value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+    if (/^[\s]*[=+@-]/u.test(text) || /^[\t\r\n]/u.test(text)) text = "'" + text;
+    return '"' + text.replace(/"/g, '""') + '"';
+  }
+  const api = {words, has, relevant, valid, missing, noView, tally, office, csvCell};
+  return api;
+})();
+// END EMBEDDED SERVER RULES
+
 /* NHETE consultation. Only public entry points below are callable by the browser.
  * Helpers end in '_' so google.script.run cannot invoke them.
  */
@@ -105,7 +165,7 @@ function validateChanges_(changes) {
   Object.keys(changes).forEach(id => {
     if (!questions[id]) throw new Error('Unknown question.');
     const q = questions[id], value = changes[id];
-    if (value !== '' && value !== false && !(Array.isArray(value) && !value.length) && !NheteRules.valid(q,value)) {
+    if (value !== '' && value !== false && !(Array.isArray(value) && !value.length) && !NHETE_SERVER_RULES_.valid(q,value)) {
       throw new Error(q.type === 'text' ? 'Please keep your answer to 1,500 words or fewer.' : 'Invalid answer.');
     }
     if (value === false && !['check','toggle'].includes(q.type) || Array.isArray(value) && q.type !== 'multi' || value === '' && ['check','toggle','multi'].includes(q.type)) throw new Error('Invalid answer type.');
@@ -115,9 +175,6 @@ function validateChanges_(changes) {
 }
 function bootstrap(token, device) {
   const p = authenticate_(token,false);
-  if (typeof NheteRules === 'undefined' || typeof NheteRules.missing !== 'function') {
-    throw new Error('Rules.gs is missing or outdated. Add the current Rules.gs file in Apps Script, save, and deploy a new version.');
-  }
   locked_(ensureModule_);
   const owner = owner_(p,device);
   let open = true; try { writable_(); } catch (_) { open = false; }
@@ -142,7 +199,7 @@ function saveAnswers(token, request) {
     writable_();
     if (Number(request.expectedVersion) !== state.version) return {ok: false,conflict: true,response: state};
     const answers = Object.assign({},state.answers,changes);
-    const missing = NheteRules.missing(content_(),answers,request.submit ? null : request.validateScreen || '__no_validation__');
+    const missing = NHETE_SERVER_RULES_.missing(content_(),answers,request.submit ? null : request.validateScreen || '__no_validation__');
     if (missing.length) return {ok:false,missing};
     const commit = random_(), rows = [];
     Object.keys(changes).forEach(qid => {
@@ -169,7 +226,7 @@ function adminData(token) {
 function recordDecision(token,input) {
   const actor = authenticate_(token,true);
   if (!input || !content_().questions.some(q => q.id === input.questionId)) throw new Error('Unknown question.');
-  ['decision','reason'].forEach(k => { if (typeof input[k] !== 'string' || !input[k].trim() || NheteRules.words(input[k])>1500) throw new Error('A decision and reason are required (up to 1,500 words each).'); });
+  ['decision','reason'].forEach(k => { if (typeof input[k] !== 'string' || !input[k].trim() || NHETE_SERVER_RULES_.words(input[k])>1500) throw new Error('A decision and reason are required (up to 1,500 words each).'); });
   return locked_(() => { sheet_('Module20261102Decisions').appendRow([random_(),input.questionId,JSON.stringify(input.decision),JSON.stringify(input.reason),actor.email,new Date().toISOString()]);return {ok:true}; });
 }
 function signOut(token) {
