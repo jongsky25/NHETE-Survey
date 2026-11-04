@@ -92,7 +92,7 @@ python -m http.server 8860 --bind 127.0.0.1 --directory development
 npm run test:browser
 ```
 
-The committed checks cover 17 rule/backend cases; ES2020 parsing of every .gs file; 50 screen renders and a full Continue-to-Submit browser journey; conditional comments/coverage/parts skipping; mobile scroll; original-screen resume; browser→Apps Script→mock Sheets public entry, consent, resume, save, protected administration, archive CSV and exclusion. Mock fixtures are fabricated, not participant data.
+The committed checks cover 18 rule/backend cases; ES2020 parsing of every .gs file; 50 screen renders and a full Continue-to-Submit browser journey; conditional comments/coverage/parts skipping; mobile scroll; original-screen resume; browser→Apps Script→mock Sheets public entry, consent, resume, save, protected administration, archive CSV and exclusion. Mock fixtures are fabricated, not participant data.
 
 The three deployment artifacts Client.html/Styles.html/Content.gs are checked against the tested development sources. The source audit has no missing references, with the two explicit disclosure amendments. No test establishes what code is currently running in the user's live Google deployment.
 
@@ -103,3 +103,7 @@ The three deployment artifacts Client.html/Styles.html/Content.gs are checked ag
 3. Eight official-source URLs remain absent from the Word: B11.ev1, C02.ev1, C03.ev1, C13.ev1, D05.ev1, D10.ev1, D11.ev1 and D20.ev1. All 54 supplied DOI URLs are preserved. Do not invent URLs or claim independent DOI verification.
 
 The user prefers short practical instructions and direct browser-accessible GitHub Raw links. Preserve existing data and approved exceptions. Earlier publication authorization covers module code/text/diagrams and subsequent fixes, not actual responses or credentials. Never force-push or overwrite newer remote work.
+
+## November 4 loader correction
+
+The live Google app reported “Blob object must have non-null content type” in Content.gs. The generated loader now explicitly supplies application/x-gzip and a .gz filename to Utilities.newBlob before Utilities.ungzip. The mock now enforces this requirement, and a regression check reproduces the previous error. Only Content.gs needs to be copied and redeployed for this correction; module content and stored responses are unchanged. Live confirmation of the corrected deployment remains pending.

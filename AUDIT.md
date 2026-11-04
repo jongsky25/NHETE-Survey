@@ -28,7 +28,7 @@ The document contains 50 actual screens plus two template descriptions. Four act
 ## Checks run
 
 - `python tools/audit_word.py`: complete source mapping, formatting, exact diagrams, order and deployment payload parity.
-- `node --test tests/backend.test.cjs tests/rules.test.cjs`: **17 passing tests**, including every .gs file parsed as ES2020 and Code.gs running without optional Rules.gs.
+- `node --test tests/backend.test.cjs tests/rules.test.cjs`: **18 passing tests**, including every .gs file parsed as ES2020 and Code.gs running without optional Rules.gs.
 - `node tests/browser.cjs`: all 50 screens rendered; full Continue-to-Submit journey; conditional controls; forward/back skipping; mobile scroll; old-screen resume.
 - `node tests/integration.cjs`: browser → actual Apps Script code → mock Sheets, covering entry, consent, resume, domain/parts saving, protected administration, archive export and exclusion.
 
@@ -39,3 +39,7 @@ Fixtures are fabricated. No live participant responses or credentials were acces
 These results verify the published implementation, not the current code in the owner's live Google app. The owner must copy the four updated files and deploy a new version of the existing deployment before live confirmation is possible.
 
 The Word supplies 54 DOI links and leaves eight official-source URLs unspecified. All supplied links and 62 research summaries are preserved. No missing URLs were invented, and these checks do not claim independent verification that the publications or links are correct.
+
+## November 4 loader correction
+
+The live Google app reported “Blob object must have non-null content type” in Content.gs. The generated loader now explicitly supplies application/x-gzip and a .gz filename to Utilities.newBlob before Utilities.ungzip. The mock now enforces this requirement, and a regression check reproduces the previous error. Only Content.gs needs to be copied and redeployed for this correction; module content and stored responses are unchanged. Live confirmation of the corrected deployment remains pending.

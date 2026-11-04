@@ -70,5 +70,5 @@ assert len(c['indicators'])==35 and sum(len(i['parts']) for i in c['indicators']
 assert len({q['id'] for q in c['questions']})==len(c['questions'])
 (ROOT/'development/content.json').write_text(json.dumps(c,ensure_ascii=False,indent=2)+'\n')
 packed=base64.b64encode(gzip.compress(json.dumps(c,ensure_ascii=False,separators=(',',':')).encode(),mtime=0)).decode()
-(ROOT/'apps-script/Content.gs').write_text('// Generated from the November 3 Word module. See source/word-v20261103.json and AUDIT.md.\nconst NHETE_CONTENT = JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(\''+packed+'\'))).getDataAsString());\n')
+(ROOT/'apps-script/Content.gs').write_text('// Generated from the November 3 Word module. See source/word-v20261103.json and AUDIT.md.\nconst NHETE_CONTENT = JSON.parse(Utilities.ungzip(Utilities.newBlob(Utilities.base64Decode(\''+packed+'\'), \'application/x-gzip\', \'nhete-module.json.gz\')).getDataAsString());\n')
 print('Built',len(c['screens']),'screens,',len(c['questions']),'fields, 35 indicators, 74 parts')
