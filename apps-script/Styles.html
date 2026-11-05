@@ -343,6 +343,12 @@ figure { margin: 24px 0; }
 .indicator-matrix thead th:nth-child(2) { width: 29%; }
 .parts-matrix thead th:first-child { width: 14%; }
 .parts-matrix thead th:nth-child(2) { width: 30%; }
+/* Split the remaining width equally across response columns. */
+@media (min-width: 900px) {
+  .indicator-matrix thead th:nth-child(n+3) { width: 13%; }
+  .parts-matrix thead th:nth-child(n+3) { width: 28%; }
+  .parts-matrix thead th:nth-child(3):last-child { width: 56%; }
+}
 .matrix-wrap .matrix-code { position: static; width: auto; }
 .response-grid th:first-child { width: 16%; }
 .response-grid th:nth-child(2) { width: 28%; }
