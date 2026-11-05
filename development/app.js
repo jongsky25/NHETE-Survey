@@ -435,7 +435,7 @@
           if(suffix==='SG.3') {
             const ref=national?'QSG.3n':'QSG.3';q={...q,label:substituted(template(ref+'-label'),region),help:[template(ref+'-help')]};
           }
-          tr.append(el('td',{class:'matrix-answer'},rules.relevant(q,answers(),content)?matrixField(q):el('div',{class:'not-needed'},sourceText(q.label,'div',{class:'matrix-label'}),el('span',{text:'This question is only applicable for datasets that can produce barangay-level data'}))));
+          tr.append(el('td',{class:'matrix-answer'},rules.relevant(q,answers(),content)?matrixField(q):el('div',{class:'not-needed'},el('span',{text:'This question is only applicable for datasets that can produce barangay-level data'}))));
         });
         tbody.append(tr);
       });
