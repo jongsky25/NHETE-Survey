@@ -49,7 +49,7 @@
       if(!first)first=group;
     });
     if(first) {
-      first.querySelector('input:not(:disabled),textarea:not(:disabled),select:not(:disabled)')?.focus({preventScroll:true});
+      first.querySelector('summary,input:not(:disabled),textarea:not(:disabled),select:not(:disabled):not([hidden])')?.focus({preventScroll:true});
       first.scrollIntoView({block:'start'});
     }
   }
@@ -75,7 +75,7 @@
   function glossary(term) {
     const row = glossaryRow(term); if (!row) return;
     const previous = document.activeElement, dialog=el('dialog',{'aria-label':term,class:'glossary-dialog'});
-    dialog.append(el('h2',{text:term}),sourceText(row,'div'),action('Close',() => dialog.close()));
+    dialog.append(el('h2',{text:term}),el('div',{},rich(row,false)),action('Close',() => dialog.close()));
     dialog.addEventListener('close',() => {dialog.remove();previous?.focus();});
     document.body.append(dialog);dialog.showModal();
   }
@@ -109,6 +109,39 @@
   function sourceText(row,tag='p',attrs={}) {
     return el(tag,{'data-source-ref':row.ref,...attrs},rich(row));
   }
+  function applyGlossaryRules(card) {
+    const explained=new Set();
+    // Explicit source references keep this editorial rule deterministic.
+    const definitions={
+      's5b.4':['service-ready'], 's4b.3':['indicator','domain'],
+      's4c.5':['red flags'], 's4c.3':['cut-off'], 's8b.9':['No view or opinion'],
+      'welcome.3':['NHETE'], 'welcome.5':['No view or opinion'],
+      's2a.3':['Unserved and Underserved Communities'], 's2a.5':['NHETE'],
+      'consent.3':['BLHSD'], 's4a-1.5':['domain'], 's4a-2.6':['domain'],
+      's4a-1.11':['4Ps'], 's4d.3':['pilot'], 's5c.3':['big choices'],
+      's5d.3':['short list','No view or opinion'], 's7e.3':['Unserved and Underserved Communities','P1 to P4'],
+      's5a.6':['ground rules'], 's5a.7':['big choices'], 's5b.3':['ground rules']
+    };
+    card.querySelectorAll('[data-source-ref]').forEach(node=>{
+      (definitions[node.dataset.sourceRef] || []).forEach(term=>explained.add(term.toLowerCase()));
+      // Definitions and expanded acronyms can also occur inside formatted runs.
+      const text=node.textContent.toLowerCase();
+      content.glossary.filter(r=>!/^GL-[A-D]\d\d$/.test(r.ref)).forEach(row=>{
+        const term=(row.kind.match(/[“"](.+?)[”"]/u)?.[1] || row.ref.replace('GL-','')).toLowerCase();
+        const escaped=term.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+        const definition=row.text.split('.')[0].toLowerCase();
+        if(new RegExp('(?:^|[.!?]\\s+)(?:an? |the )?'+escaped+' (?:is|are|means|stands for)\\b').test(text) ||
+          (text.includes(term) && definition.length>15 && text.includes(definition)))explained.add(term);
+      });
+    });
+    const seen=new Set();
+    card.querySelectorAll('.glossary-word').forEach(button=>{
+      const term=button.textContent.toLowerCase(), indicator=/^[a-d]\d\d$/.test(term);
+      const heading=button.closest('h1,h2,h3,h4,h5,h6,th,legend,summary,caption,.matrix-label,.tile-heading,.pill,strong[data-source-ref]');
+      if(heading || button.closest('.matrix-mobile-help') && window.innerWidth>=900 || !indicator && (explained.has(term) || seen.has(term)))button.replaceWith(document.createTextNode(button.textContent));
+      else if(!indicator)seen.add(term);
+    });
+  }
   function captureView() {
     const active=document.activeElement;
     const scope=active?.closest('[data-question-id],[data-view-key]');
@@ -116,7 +149,7 @@
       screen:currentScreen().id,x:window.scrollX,y:window.scrollY,
       scrolls:Array.from(main.querySelectorAll('[data-scroll-key]')).map(node=>({key:node.dataset.scrollKey,left:node.scrollLeft,top:node.scrollTop})),
       panels:Array.from(main.querySelectorAll('details[data-view-key]')).map(node=>({key:node.dataset.viewKey,open:node.open})),
-      active:scope&&/^(INPUT|TEXTAREA|SELECT|BUTTON)$/.test(active.tagName)?{
+      active:scope&&/^(INPUT|TEXTAREA|SELECT|BUTTON|SUMMARY)$/.test(active.tagName)?{
         question:scope.dataset.questionId,view:scope.dataset.viewKey,
         tag:active.tagName,name:active.name,value:active.value,id:active.id,top:active.getBoundingClientRect().top
       }:null
@@ -142,7 +175,7 @@
         const saved=view.active;
         const scopes=Array.from(main.querySelectorAll('[data-question-id],[data-view-key]'));
         const scope=scopes.find(n=>saved.question?n.dataset.questionId===saved.question:n.dataset.viewKey===saved.view);
-        const control=scope&&Array.from(scope.querySelectorAll('input,textarea,select,button')).find(n=>
+        const control=scope&&Array.from(scope.querySelectorAll('input,textarea,select,button,summary')).find(n=>
           n.tagName===saved.tag && (saved.id?n.id===saved.id:n.name===saved.name&&n.value===saved.value));
         if(control){
           control.focus({preventScroll:true});
@@ -283,7 +316,7 @@
       const tr=el('tr',{'data-question-id':id},el('th',{scope:'row','data-source-ref':q.rowLabel.ref},rich(q.rowLabel)),red?null:el('td',{'data-source-ref':q.rowDescription?.ref},q.rowDescription?rich(q.rowDescription):rich(q.label)));
       q.options.forEach(o=>{
         const radio=el('input',{type:'radio',name:id,value:o.text,checked:value===o.text,disabled:!data.open,'aria-label':q.rowLabel.text+' — '+o.text,onchange:()=>setAnswer(id,o.text,true)});
-        tr.append(el('td',{},radio));
+        tr.append(el('td',{'data-choice':o.text},radio));
       });
       tr.append(el('td',{},rules.relevant(comment,answers(),content)?field(comment,true):null));tbody.append(tr);
     });
@@ -319,8 +352,20 @@
     select.append(el('option',{value:'',text:ui('D-mx.1'),'data-source-ref':'D-mx.1'}));
     q.options.forEach(o=>select.append(el('option',{value:o.text,text:o.text,'data-source-ref':o.ref})));
     select.value=value || '';select.onchange=()=>setAnswer(q.id,select.value,true);
-    if(q.shortOptions)group.append(el('div',{class:'short-select'},select,el('span',{'aria-hidden':'true',text:value?value.split('.')[0]:ui('D-mx.1')})));
-    else group.append(select);
+    // Native option popups cannot wrap reliably. Use an in-flow disclosure
+    // with native radios; retain a hidden select for value synchronization.
+    select.hidden=true;select.tabIndex=-1;select.required=false;
+    const picker=el('details',{class:'choice-picker'});
+    const summary=el('summary',{id:'choice-'+q.id,'aria-label':select.getAttribute('aria-label')+' — '+(value || ui('D-mx.1')),text:value?(q.shortOptions?value.split('.')[0]:value):ui('D-mx.1')});
+    picker.append(summary);
+    const options=el('div',{class:'choice-options',role:'radiogroup','aria-label':select.getAttribute('aria-label')});
+    q.options.forEach(o=>{
+      const radio=el('input',{type:'radio',name:'choice-'+q.id,value:o.text,checked:value===o.text,disabled:!data.open,
+        onchange:()=>{picker.open=false;summary.focus({preventScroll:true});select.value=o.text;setAnswer(q.id,o.text,true);}});
+      options.append(el('label',{class:'choice-option'},radio,el('span',{'data-source-ref':o.ref,text:o.text})));
+    });
+    picker.append(options);picker.addEventListener('keydown',e=>{if(e.key==='Escape'){picker.open=false;summary.focus();}});
+    group.append(select,picker);
     if(q.extra && rules.relevant(qmap[q.extra],answers(),content))group.append(matrixField(qmap[q.extra]));
     return group;
   }
@@ -370,7 +415,7 @@
     section.append(sourceText(template('s8g.4')));
     const first=content.screens.find(s=>s.id.startsWith('cp-') && rules.screenVisible(s,answers(),content));
     if(first?.id===currentScreen().id)section.append(sourceText(template('s8g.5'),'p',{class:'note'}));
-    const head=['CP.h1','CP.h2','QSG.1-label','QSG.2-label'];
+    const head=['CP.h1','CP.h2','QSG.2-label'];
     const headings=head.map(matrixHeading);
     if(region){const ref=national?'QSG.3n-label':'QSG.3-label';const h=matrixHeading(ref);h.firstChild.replaceWith(sourceText(substituted(template(ref),region),'span'));headings.push(h);}
     const table=el('table',{class:'parts-matrix'},el('thead',{},el('tr',{},headings))),tbody=el('tbody');
@@ -379,12 +424,12 @@
       ind.parts.forEach((part,i)=>{
         const prefix=code+':part'+(i+1)+':';
         const tr=el('tr',{'data-part':code+'.p'+(i+1)},el('th',{scope:'row',class:'matrix-code'},el('span',{},textWithGlossary(code,true)),el('div',{class:'small',text:ind.title})),el('td',{class:'part-name'},sourceText(part,'span')));
-        ['SG.1','SG.2',...(region?['SG.3']:[])].forEach(suffix=>{
+        ['SG.2',...(region?['SG.3']:[])].forEach(suffix=>{
           let q=qmap[prefix+suffix];
           if(suffix==='SG.3') {
             const ref=national?'QSG.3n':'QSG.3';q={...q,label:substituted(template(ref+'-label'),region),help:[template(ref+'-help')]};
           }
-          tr.append(el('td',{class:'matrix-answer'},rules.relevant(q,answers(),content)?matrixField(q):el('div',{class:'not-needed'},sourceText(q.label,'div',{class:'matrix-label'}),sourceText(content.ui['D-mx.12'],'span'))));
+          tr.append(el('td',{class:'matrix-answer'},rules.relevant(q,answers(),content)?matrixField(q):el('div',{class:'not-needed'},sourceText(q.label,'div',{class:'matrix-label'}),el('span',{text:'This question is only applicable for datasets that can produce barangay-level data'}))));
         });
         tbody.append(tr);
       });
@@ -457,6 +502,7 @@
       }
     });
     main.append(card);
+    applyGlossaryRules(card);
     if(screen.id!=='end1') {
       const submit=screen.blocks.find(b=>b.type==='submit');
       main.append(el('div',{class:'page-actions'},action(ui('D-nav.2'),()=>go(screenIndex-1,true),{disabled:screenIndex===0,'data-source-ref':'D-nav.2'}),el('span',{class:'spacer'}),

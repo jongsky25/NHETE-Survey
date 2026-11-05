@@ -107,3 +107,15 @@ The user prefers short practical instructions and direct browser-accessible GitH
 ## November 4 loader correction
 
 The live Google app reported “Blob object must have non-null content type” in Content.gs. The generated loader now explicitly supplies application/x-gzip and a .gz filename to Utilities.newBlob before Utilities.ungzip. The mock now enforces this requirement, and a regression check reproduces the previous error. Only Content.gs needs to be copied and redeployed for this correction; module content and stored responses are unchanged. Live confirmation of the corrected deployment remains pending.
+
+## November 5 layout and questionnaire revision
+
+This revision supersedes the earlier scrolling, native dropdown, SG.1 and glossary behavior above.
+
+- Participant pages fill the available window width. Tables grow with the page; there are no nested table scroll areas. Narrow screens show labeled rows.
+- Matrix choices use keyboard-accessible disclosure panels with radio choices that wrap inside their cells. Full option wording and stored values are unchanged.
+- Parts are filtered by the indicator holder answer. SG.1 and its extra description are retired from the active questionnaire and retained in the legacy schema. SG.2 is required immediately for every displayed part. Coverage applies at household/person, purok/sitio/zone or barangay level only, within the existing regional scope. Inapplicable cells say “This question is only applicable for datasets that can produce barangay-level data”. There are now 415 active fields.
+- Terminology links appear once per page, outside headings and titles. Source paragraphs explaining a term suppress its links for that page. Indicator code definitions remain repeatable outside headings. The editorial source-reference map in applyGlossaryRules covers explanatory paragraphs that do not use a simple definition sentence.
+- Storage version, response sheets and historical values are unchanged.
+
+Copy Client.html, Styles.html and Content.gs together into the existing Apps Script project and deploy a new version. Code.gs is unchanged in this revision. GitHub publication does not update the live Google app.

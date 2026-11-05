@@ -1,6 +1,6 @@
 # Update the existing Google Apps Script app
 
-This is the **November 3 Word module**, including domain tables, parts tables and the scroll-position fix.
+This is the **November 3 Word module with the November 5 layout revision**: full-width pages, tables that grow with the page, wrapping choices, simplified parts questions, and first-mention glossary links. For this revision, replace **Client.html, Styles.html and Content.gs together**; Code.gs is unchanged. The full refresh instructions below also remain valid.
 
 Replace these **four existing files together**. Open each Raw link, select all and copy; select all in the matching Apps Script file and paste the complete content.
 

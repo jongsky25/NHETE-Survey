@@ -56,8 +56,12 @@ for domain in 'ABCD':
    q=question(prefix+'SG.1','QSG.1',cp['id'],**attrs)
    q.update(extra=prefix+'SG.1:extra',extraChoices=['QSG.1-c2'])
    textq(prefix+'SG.1:extra','D-mx.14',cp['id'],True,whenChoiceRefs={'question':q['id'],'refs':['QSG.1-c2']},**attrs)
-   question(prefix+'SG.2','QSG.2',cp['id'],when={'question':q['id'],'values':[row('QSG.1-c1')['text'],row('QSG.1-c2')['text']]},**attrs)
-   question(prefix+'SG.3','QSG.3',cp['id'],coverage=True,when={'question':q['id'],'values':[row('QSG.1-c1')['text'],row('QSG.1-c2')['text']]},alsoWhen={'question':prefix+'SG.2','values':[row('QSG.2-c'+str(n))['text'] for n in range(1,5)]},**attrs)
+   question(prefix+'SG.2','QSG.2',cp['id'],**attrs)
+   question(prefix+'SG.3','QSG.3',cp['id'],coverage=True,alsoWhen={'question':prefix+'SG.2','values':[row('QSG.2-c'+str(n))['text'] for n in range(1,4)]},**attrs)
+# Retain retired part-holder fields for old queued saves and historical exports.
+retired=[q for q in c['questions'] if q['id'].endswith((':SG.1',':SG.1:extra'))]
+c['legacyQuestions'].extend(retired)
+c['questions']=[q for q in c['questions'] if q not in retired]
 idx=next(i for i,s in enumerate(c['screens']) if s['id']=='s8-RF');c['screens'][idx:idx]=new
 for stop in c['stops']:stop['screens']=[s['id'] for s in c['screens'] if s['stop']==stop['id']]
 # Use the actual attached diagrams, including their binary bytes, not the old image cache.
