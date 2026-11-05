@@ -21,3 +21,19 @@ test('discard active part answers via patch while preserving input history',()=>
 test('a changed office scope cannot reuse an answer about a different area',()=>{assert.equal(r.normalizeChanges(c,{'0.4':options('0.4')[1],'A01:part1:SG.3':'All'},{'0.4':options('0.4')[0]})['A01:part1:SG.3'],'');});
 test('1500 words, exclusive no-view, six-person and 75 percent agreement',()=>{assert(r.valid({type:'text',required:true},'word '.repeat(1500)));assert(!r.valid({type:'text',required:true},'word '.repeat(1501)));const choice=q('A01.q-v'),a=choice.options[0].text,b=choice.options[1].text;const rs=Array.from({length:8},(_,i)=>({status:'submitted',answers:{[choice.id]:i<6?a:b}}));assert(r.tally(choice,rs,c).shortlist);rs[0].review={included:false};assert(!r.tally(choice,rs,c).shortlist);rs[1].answers[choice.id]=choice.options.at(-1).text;assert.equal(r.tally(choice,rs,c).n,6);});
 test('fresh coverage supplied with a changed scope survives an offline save batch',()=>{const patch={'0.4':options('0.4')[0],'A01:part1:SG.3':'Most (more than or equal to 75%)'};assert.equal(r.normalizeChanges(c,{'0.4':options('0.4')[1]},patch)['A01:part1:SG.3'],patch['A01:part1:SG.3']);});
+
+test('Defer, Drop and no-view disable subsequent fields and parts without erasing answers',()=>{
+ const saved={'A01.q-k':yes,'A01.q-c':options('A01.q-c')[2],'A01.q-o':'Saved comment','A01:part1:SG.2':options('A01:part1:SG.2')[0]};
+ for(const value of options('A01.q-v')) {
+  const a={...saved,'A01.q-v':value},disabled=options('A01.q-v').slice(3).includes(value);
+  assert.equal(r.pilotDisabled('A01',a),disabled);
+  assert(r.relevant(q('A01.q-v'),a,c));
+  for(const id of ['A01.q-c','A01.q-w','A01.q-k','A01.q-o','A01:part1:SG.2'])assert.equal(r.relevant(q(id),a,c),!disabled);
+  assert.equal(r.screenVisible(c.screens.find(s=>s.id==='cp-A'),a,c),!disabled);
+  if(disabled) {
+   assert(!r.missing(c,a,'mx-A').some(id=>id.startsWith('A01.')));
+   assert.equal(r.tally(q('A01.q-k'),[{status:'submitted',answers:a}],c).n,0);
+  }
+  assert.deepEqual(r.normalizeChanges(c,saved,{'A01.q-v':value}),{'A01.q-v':value});
+ }
+});

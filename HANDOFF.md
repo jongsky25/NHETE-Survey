@@ -119,3 +119,9 @@ This revision supersedes the earlier scrolling, native dropdown, SG.1 and glossa
 - Storage version, response sheets and historical values are unchanged.
 
 Copy Client.html, Styles.html and Content.gs together into the existing Apps Script project and deploy a new version. Code.gs is unchanged in this revision. GitHub publication does not update the live Google app.
+
+### Follow-up: pilot choices disable the rest of each indicator row
+
+Defer, Drop and No view or opinion disable cut-off, worry, holder and comment controls. Shared client/server relevance rules also omit those answers from validation and tallies, and exclude the indicator from parts screens and custodian summaries. Previously entered answers are preserved and become available again if the participant selects Include, Compare or Test only. A blank pilot answer retains the previous behavior.
+
+This follow-up also changes **Code.gs** (embedded server rules) and optional Rules.gs. For the complete revision, replace **Code.gs, Client.html, Styles.html and Content.gs** together and deploy a new Apps Script version. The earlier three-file instruction applies only to the layout-only commit.

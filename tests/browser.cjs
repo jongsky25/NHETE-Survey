@@ -34,6 +34,18 @@ const q=id=>c.questions.find(q=>q.id===id),opt=(id,n=0)=>q(id).options[n].text;
  await seed('mx-A',{},390);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  const select=page.locator('[data-question-id="A04.q-v"] summary');await select.scrollIntoViewIfNeeded();await select.focus();const before=await select.boundingBox();await select.click();await page.locator('[data-question-id="A04.q-v"] input[type=radio]').first().click();await page.waitForTimeout(100);const after=await select.boundingBox();assert(Math.abs(after.y-before.y)<3,'mobile selected control stays in place '+JSON.stringify({before,after}));
  await page.screenshot({path:'tests/mobile-matrix.png',fullPage:false});
+ // Pilot exclusions disable every subsequent control and restore saved answers on re-inclusion.
+ for(const n of [3,4,5]) {
+  await seed('mx-A',{'A01.q-k':opt('A01.q-k'),'A01.q-o':'Retained comment'});
+  await choose('A01.q-v',opt('A01.q-v',n));
+  const row=page.locator('[data-indicator="A01"]');
+  assert.equal(await row.locator('.pilot-disabled').count(),4);
+  assert.equal(await row.locator('.pilot-disabled input:enabled,.pilot-disabled textarea:enabled,.pilot-disabled select:enabled').count(),0);
+  assert.equal(await row.locator('.pilot-disabled').first().getAttribute('inert'),'');
+  await choose('A01.q-v',opt('A01.q-v'));
+  assert.equal(await row.locator('.pilot-disabled').count(),0);
+  assert.equal(await row.locator('textarea').inputValue(),'Retained comment');
+ }
  // Explanatory paragraphs suppress a term throughout the page; headings never link.
  await seed('s5b');
  assert.equal(await page.locator('h1 .glossary-word, th .glossary-word, caption .glossary-word, .pill .glossary-word').count(),0);

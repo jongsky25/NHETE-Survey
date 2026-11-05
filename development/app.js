@@ -401,7 +401,13 @@
       detailsCell.append(details);tr.append(detailsCell);
       ['v','c','w','k','o'].forEach(suffix=>{
         const q=qmap[code+'.q-'+suffix];
-        tr.append(el('td',{class:'matrix-answer'},q?matrixField(q):el('div',{class:'not-needed'},sourceText(template('QT.c-label'),'div',{class:'matrix-label'}),sourceText(content.ui['D-mx.4'],'span'))));
+        let control=q?matrixField(q):null;
+        if(control && suffix!=='v' && rules.pilotDisabled(code,answers())) {
+          control.classList.add('pilot-disabled');control.setAttribute('aria-disabled','true');control.inert=true;
+          control.querySelectorAll('input,select,textarea,button').forEach(node=>{node.disabled=true;node.required=false;});
+          control.querySelectorAll('details').forEach(node=>{node.open=false;});
+        }
+        tr.append(el('td',{class:'matrix-answer'},q?control:el('div',{class:'not-needed'},sourceText(template('QT.c-label'),'div',{class:'matrix-label'}),sourceText(content.ui['D-mx.4'],'span'))));
       });
       tbody.append(tr);
     });
@@ -419,7 +425,7 @@
     const headings=head.map(matrixHeading);
     if(region){const ref=national?'QSG.3n-label':'QSG.3-label';const h=matrixHeading(ref);h.firstChild.replaceWith(sourceText(substituted(template(ref),region),'span'));headings.push(h);}
     const table=el('table',{class:'parts-matrix'},el('thead',{},el('tr',{},headings))),tbody=el('tbody');
-    block.codes.filter(code=>rules.holds(answers()[code+'.q-k'])).forEach(code=>{
+    block.codes.filter(code=>!rules.pilotDisabled(code,answers()) && rules.holds(answers()[code+'.q-k'])).forEach(code=>{
       const ind=content.indicators.find(i=>i.code===code);
       ind.parts.forEach((part,i)=>{
         const prefix=code+':part'+(i+1)+':';
@@ -541,7 +547,7 @@
     });
     main.append(el('h2',{text:'Agreement summaries'}),table(['Reference','Question','With a view','Most common','Agreement','Route','Counts'],rows));
     const dataRows=content.indicators.map(ind=>{
-      const relevant=included.filter(r=>r.status==='submitted');
+      const relevant=included.filter(r=>r.status==='submitted' && !rules.pilotDisabled(ind.code,r.answers));
       const notOurs=relevant.filter(r=>r.answers[ind.code+'.q-k']==='No, we do not keep it').map(rules.office);
       const unsure=relevant.filter(r=>r.answers[ind.code+'.q-k']==='I do not know').map(rules.office);
       const holders=relevant.filter(r=>rules.holds(r.answers[ind.code+'.q-k'])).map(rules.office);

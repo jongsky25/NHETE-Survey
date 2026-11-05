@@ -7,7 +7,11 @@ const NHETE_SERVER_RULES_ = (function () {
     const v = answers[condition.question];
     return Array.isArray(v) ? v.some(x => condition.values.includes(x)) : condition.values.includes(v);
   }
+  function pilotDisabled(code, answers) {
+    return /^(?:Defer|Drop|No view or opinion)(?:\.|$)/u.test(answers[code+'.q-v'] || '');
+  }
   function relevant(q, answers, content) {
+    if (q.indicator && q.id !== q.indicator+'.q-v' && pilotDisabled(q.indicator, answers)) return false;
     if (q.holder && !holds(answers[q.holder])) return false;
     if (q.coverage && !coverageRegion(answers,content)) return false;
     if (q.unless && answers[q.unless] === true) return false;
@@ -28,7 +32,7 @@ const NHETE_SERVER_RULES_ = (function () {
   }
   function isRequired(q, answers) { return q.required || !!q.requiredAny?.some(c=>matches(c,answers)); }
   function screenVisible(screen, answers, content) {
-    return !screen.id.startsWith('cp-') || content.indicators.some(i=>i.partsScreen===screen.id && holds(answers[i.code+'.q-k']));
+    return !screen.id.startsWith('cp-') || content.indicators.some(i=>i.partsScreen===screen.id && !pilotDisabled(i.code, answers) && holds(answers[i.code+'.q-k']));
   }
   function normalizeChanges(content, before, patch) {
     const changes={...patch}, next={...before,...patch};
@@ -85,7 +89,7 @@ const NHETE_SERVER_RULES_ = (function () {
     if (/^[\s]*[=+@-]/u.test(text) || /^[\t\r\n]/u.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   }
-  const api = {holds, coverageRegion, isRequired, screenVisible, normalizeChanges, words, has, relevant, valid, missing, noView, tally, office, csvCell};
+  const api = {pilotDisabled, holds, coverageRegion, isRequired, screenVisible, normalizeChanges, words, has, relevant, valid, missing, noView, tally, office, csvCell};
   return api;
 })();
 // END EMBEDDED SERVER RULES

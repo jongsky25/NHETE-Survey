@@ -361,3 +361,6 @@ figure { margin: 24px 0; }
   .response-grid td[data-choice]::before { content: attr(data-choice); flex: 1; }
   .response-grid th:first-child { width: 100%; }
 }
+
+.pilot-disabled { opacity: .5; }
+.pilot-disabled .choice-picker, .pilot-disabled textarea { background: var(--soft); cursor: not-allowed; }
