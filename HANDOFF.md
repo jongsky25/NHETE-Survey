@@ -125,3 +125,13 @@ Copy Client.html, Styles.html and Content.gs together into the existing Apps Scr
 Defer, Drop and No view or opinion disable cut-off, worry, holder and comment controls. Shared client/server relevance rules also omit those answers from validation and tallies, and exclude the indicator from parts screens and custodian summaries. Previously entered answers are preserved and become available again if the participant selects Include, Compare or Test only. A blank pilot answer retains the previous behavior.
 
 This follow-up also changes **Code.gs** (embedded server rules) and optional Rules.gs. For the complete revision, replace **Code.gs, Client.html, Styles.html and Content.gs** together and deploy a new Apps Script version. The earlier three-file instruction applies only to the layout-only commit.
+
+## Analysis views
+
+`development/analysis.js` projects the committed response journal into six readable tabs: Analysis Guide, Respondents, Answers by Question, Choice Summary, Question Guide and Response Matrix. It is embedded in Code.gs by the runtime builder. No participant data belongs in this repository.
+
+Use Secretariat → Refresh analysis sheets after copying Code.gs and Client.html into the existing deployment, or run the private `refreshAnalysis_` function from the script editor. Reports are snapshots, not automatically refreshed. The browser entry point authenticates a secretariat administrator. The writer only replaces tabs with the generated-report marker in A1's note; other tabs and response history stay intact. Keep analyst annotations on separate tabs.
+
+Each detail row carries the question text, indicator/part or grid statement, respondent status and applicability. Summary counts use submitted, included responses only. Percentages include No view or opinion in the answered denominator and are descriptive rather than agreement decisions. Separate device entries are not deduplicated by email. Long answers are split into numbered parts without truncation; the wide matrix points to these detail rows. Formula-like user text is written as literal text.
+
+Verification includes source mapping, long answers, excluded/draft responses, conditional questions, server authorization, generated-tab ownership checks, journal preservation and browser-to-backend refresh using fabricated responses.

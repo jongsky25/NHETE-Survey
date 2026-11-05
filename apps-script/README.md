@@ -23,3 +23,7 @@ GitHub publication does not deploy the Google app. Live deployment still needs t
 ## What was checked
 
 [Source audit and test results](../AUDIT.md): all 1,158 named Word references mapped; the two approved identity disclosures retained; three diagrams preserved exactly; 35 indicators and 74 parts; all 50 possible screens rendered and traversed; backend and browser behavior tested using fabricated responses and a mock Sheets service. Existing response identifiers, sheets and historical answers are preserved.
+
+## Readable response analysis
+
+Copy the latest **Code.gs and Client.html** and redeploy to add **Secretariat → Refresh analysis sheets**. The button rebuilds six analysis tabs in the existing workbook from the latest committed answers, including full question labels and indicator/part context. You can also run `refreshAnalysis_` in the script editor. Analysis tabs are snapshots; refresh before analysis. Draft and excluded entries are labeled in detail views; Choice Summary uses only submitted, included responses. Original storage tabs remain intact.

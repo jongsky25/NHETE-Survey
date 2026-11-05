@@ -5,7 +5,7 @@
   "description": "Word-driven NHETE Google Apps Script consultation",
   "scripts": {
     "build": "python tools/build_content.py && python tools/build_runtime.py",
-    "test": "python tools/audit_word.py && node --test tests/backend.test.cjs tests/rules.test.cjs",
+    "test": "python tools/audit_word.py && node --test tests/backend.test.cjs tests/rules.test.cjs tests/analysis.test.cjs",
     "test:browser": "node tests/browser.cjs && node tests/integration.cjs"
   },
   "devDependencies": {

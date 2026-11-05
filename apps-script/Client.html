@@ -639,6 +639,12 @@
       return [r.entry?.name || '',r.entry?.email || '',r.entry?.agency || '',rules.office(r),r.answers['0.2'] || '',r.status,accepted?'Included':'Excluded',reason,button];
     })));
 
+    const analysisStatus=el('p',{class:'small',role:'status'});
+    main.append(action('Refresh analysis sheets',async()=>{
+      const report=await rpc('refreshAnalysis',token);
+      analysisStatus.replaceChildren('Analysis sheets updated. ',el('a',{href:report.url,target:'_blank',rel:'noopener noreferrer',text:'Open the response workbook'}));
+    }),analysisStatus);
+
     const rows=content.questions.filter(q=>['choice','multi','check'].includes(q.type)).map(q=>{
       const t=rules.tally(q,included,content);return [q.id,q.label.text,t.n,t.modes.join(' / '),t.n?Math.round(t.agreement*100)+'%':'',t.shortlist?'Proposed shortlist':'Discuss',JSON.stringify(t.counts)];
     });
