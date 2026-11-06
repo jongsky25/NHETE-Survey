@@ -22,3 +22,13 @@ test('server accepts excluded indicators without subsequent answers and preserve
  assert.equal(saved.response.answers['A01.q-o'],'Earlier explanation');
  assert(h.save(e.token,1,{}, {validateScreen:'cp-A',screen:'mx-B'}).ok);
 });
+test('old agency selections resume and save under full names without rewriting history',()=>{
+ const h=harness(),e=h.enter(),old='DOH Health Facility Bureau',full='Department of Health — Health Facility Development Bureau (HFDB)';
+ assert.equal(h.save(e.token,0,{'0.1':old}).response.answers['0.1'],full);
+ const changes=h.sheets.Module20261102Changes.values;
+ changes.at(-1)[4]=JSON.stringify(JSON.stringify(old)); // simulate an existing pre-update journal
+ const snapshot=JSON.stringify(changes);
+ assert.equal(h.ctx.bootstrap(e.token,device).response.answers['0.1'],full);
+ const admin=h.ctx.adminData(h.admin).responses[0];assert.equal(admin.answers['0.1'],full);assert.equal(admin.history[0].changes['0.1'],old);
+ assert.equal(JSON.stringify(changes),snapshot);
+});

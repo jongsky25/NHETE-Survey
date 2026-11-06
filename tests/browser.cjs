@@ -55,6 +55,13 @@ const q=id=>c.questions.find(q=>q.id===id),opt=(id,n=0)=>q(id).options[n].text;
  assert.equal(new Set(ordinary).size,ordinary.length);
  await seed('s5b',{},390);
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ // Old cached agency labels select the corrected full names on resume.
+ for(const old of ['DOH Health Facility Bureau','DOH Health Policy and Planning offices']) {
+  await seed('about',{'0.1':old},390);
+  const label=q('0.1').aliases[old];
+  assert(await page.getByRole('radio',{name:label,exact:true}).isChecked());
+  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ }
  // Visit every screen with a valid full-answer fixture and inspect all rendered source nodes.
  const all={};for(const field of c.questions){if(field.type==='text')all[field.id]='An explanation for consultation.';else if(['check','toggle'].includes(field.type))all[field.id]=true;else if(field.type==='multi')all[field.id]=[field.options[0].text];else all[field.id]=field.options[0].text;}
  const rendered={};

@@ -7,6 +7,7 @@
     return typeof value === 'boolean' ? (value?'Yes':'No') : String(value);
   }
   function build(content, responses, rules, at) {
+    responses=responses.map(r=>({...r,answers:rules.normalizeAnswers(content,r.answers)}));
     const screens=Object.fromEntries(content.screens.map(s=>[s.id,s]));
     const indicators=Object.fromEntries(content.indicators.map(i=>[i.code,i]));
     const parents={};content.questions.forEach(q=>{if(q.extra)parents[q.extra]=q;if(q.comment)parents[q.comment]=q;});

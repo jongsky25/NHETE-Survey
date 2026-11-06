@@ -4,7 +4,19 @@
   "mapped_references": 1158,
   "literal_text_exceptions": [
     "aboutmat.9",
-    "consent.3"
+    "consent.3",
+    "Q0.1-c1",
+    "Q0.1-c2",
+    "Q0.1-c3",
+    "Q0.1-c4",
+    "Q0.1-c5",
+    "Q0.1-c6",
+    "Q0.1-c7",
+    "Q0.1-c8",
+    "Q0.1-c9",
+    "Q0.1-c15",
+    "Q0.1-c16",
+    "Q0.1-c18"
   ],
   "layout_specifications": 11,
   "diagrams": 3,
@@ -170,55 +182,55 @@
       "ref": "Q0.1-c1",
       "kind": "Choice 1",
       "binding": "$.questions[1].options[0]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c2",
       "kind": "Choice 2",
       "binding": "$.questions[1].options[1]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c3",
       "kind": "Choice 3",
       "binding": "$.questions[1].options[2]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c4",
       "kind": "Choice 4",
       "binding": "$.questions[1].options[3]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c5",
       "kind": "Choice 5",
       "binding": "$.questions[1].options[4]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c6",
       "kind": "Choice 6",
       "binding": "$.questions[1].options[5]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c7",
       "kind": "Choice 7",
       "binding": "$.questions[1].options[6]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c8",
       "kind": "Choice 8",
       "binding": "$.questions[1].options[7]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c9",
       "kind": "Choice 9",
       "binding": "$.questions[1].options[8]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c10",
@@ -254,13 +266,13 @@
       "ref": "Q0.1-c15",
       "kind": "Choice 15",
       "binding": "$.questions[1].options[14]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c16",
       "kind": "Choice 16",
       "binding": "$.questions[1].options[15]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c17",
@@ -272,7 +284,7 @@
       "ref": "Q0.1-c18",
       "kind": "Choice 18",
       "binding": "$.questions[1].options[17]",
-      "amended": false
+      "amended": true
     },
     {
       "ref": "Q0.1-c19",

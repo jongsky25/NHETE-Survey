@@ -144,3 +144,23 @@ matching the effective identity before calling that helper. Code.gs and the mani
 must be copied together; userinfo.email is added for this identity check. Anonymous
 and mismatched users are rejected; the authenticated Secretariat path is unchanged.
 Use runAnalysisRefresh in editor-facing instructions from now on.
+
+## November 6 full agency labels
+
+All 19 office choices were reviewed. Twelve labels now use expanded department,
+bureau, agency or team names; full names already present and broad sector choices
+remain unchanged. HFDB is Health Facility Development Bureau; HPDPB is Health Policy
+Development and Planning Bureau. Grouped categories remain grouped.
+
+The approved amendments are in source/agency-labels.json. Existing option references,
+choice order and storageVersion are preserved. Q0.1 aliases normalize legacy labels
+for resume, pending saves and analytical output, while historical journal entries and
+self-reported free-text profile agencies remain unchanged. Copy Code.gs, Client.html
+and Content.gs together, redeploy, then run runAnalysisRefresh to update report labels.
+Styles.html and the latest manifest need no further change for this revision.
+
+Name verification references: [2026 government directory](https://www.dbm.gov.ph/wp-content/uploads/AboutDBM/2026-Government-Directory.pdf),
+[PPP Center DOH bureau list](https://ppp.gov.ph/press_releases/ppp-introductory-course-conducted-for-doh-central-office/),
+[NAMRIA](https://www.namria.gov.ph/), [PHIVOLCS](https://www.phivolcs.dost.gov.ph/about-phivolcs/),
+[PAGASA](https://www.pagasa.dost.gov.ph/mandate-and-functions), and
+[PhilHealth](https://www.philhealth.gov.ph/news/up/article/2026/news_697c3fea7b458.php).

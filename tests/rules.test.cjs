@@ -37,3 +37,15 @@ test('Defer, Drop and no-view disable subsequent fields and parts without erasin
   assert.deepEqual(r.normalizeChanges(c,saved,{'A01.q-v':value}),{'A01.q-v':value});
  }
 });
+test('full agency names retain all original choices and accept old saved labels',()=>{
+ const agency=q('0.1');assert.equal(agency.options.length,19);
+ assert(agency.options.some(o=>o.text==='Department of Health — Health Facility Development Bureau (HFDB)'));
+ assert(agency.options.some(o=>o.text==='Department of Health — Health Policy Development and Planning Bureau (HPDPB)'));
+ for(const [old,full] of Object.entries(agency.aliases)){
+  assert(r.valid(agency,old));assert(r.valid(agency,full));
+  const original={'0.1':old,'0.1:extra':'Unchanged custom agency'};
+  assert.equal(r.normalizeAnswers(c,original)['0.1'],full);assert.equal(original['0.1'],old);
+  assert.equal(r.tally(agency,[{status:'submitted',answers:original}],c).counts[full],1);
+ }
+ assert.equal(r.normalizeAnswers(c,{'0.1':'Other (specify)','0.1:extra':'Custom'})['0.1:extra'],'Custom');
+});

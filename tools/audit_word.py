@@ -57,4 +57,4 @@ for e in entries:
   if m:assert e[key]==m[1],(e['row']['ref'],key)
 report={'source_sha256':s['sha256'],'named_references':len(mapping),'mapped_references':len(mapping),'literal_text_exceptions':list(c['sourceTextAmendments']),'layout_specifications':len(structural),'diagrams':len(images),'screens':len(c['screens']),'indicators':len(c['indicators']),'components':sum(len(i['parts']) for i in c['indicators']),'schema_fields':len(c['questions']),'research_entries':len(entries),'supplied_urls':sum(bool(e.get('url')) for e in entries),'unmapped':[],'mapping':mapping}
 (R/'source/audit-v20261103.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
-print('PASS:',len(mapping),'/',len(refs),'Word references mapped; 2 approved disclosure amendments; 3 exact diagrams; screen/choice order, formatting and deployed payload verified')
+print('PASS:',len(mapping),'/',len(refs),'Word references mapped;',len(c['sourceTextAmendments']),'approved text amendments; 3 exact diagrams; screen/choice order, formatting and deployed payload verified')

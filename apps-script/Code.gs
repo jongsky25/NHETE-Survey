@@ -54,7 +54,16 @@ const NHETE_SERVER_RULES_ = (function () {
     });
     return changes;
   }
+  function normalizeAnswers(content, answers) {
+    const normalized={...answers};
+    content.questions.filter(q=>q.aliases).forEach(q=>{
+      const value=answers[q.id];
+      if(typeof value==='string' && Object.prototype.hasOwnProperty.call(q.aliases,value))normalized[q.id]=q.aliases[value];
+    });
+    return normalized;
+  }
   function valid(q, value) {
+    if(q.aliases && Object.prototype.hasOwnProperty.call(q.aliases,value))value=q.aliases[value];
     if (!has(value)) return !q.required;
     if (q.type === 'text') return typeof value === 'string' && (!q.required || !!value.trim()) && words(value) <= 1500;
     if (q.type === 'check' || q.type === 'toggle') return typeof value === 'boolean';
@@ -71,7 +80,7 @@ const NHETE_SERVER_RULES_ = (function () {
   function tally(q, responses, content) {
     const counts = {}; let n = 0;
     responses.filter(p => p.status === 'submitted' && p.review?.included !== false).forEach(p => {
-      const value = p.answers[q.id];
+      const value = normalizeAnswers(content,p.answers)[q.id];
       if (!relevant(q, p.answers, content) || !has(value) || noView(value) || Array.isArray(value) && value.some(noView)) return;
       n++;
       (Array.isArray(value) ? value : [String(value)]).forEach(v => { counts[v] = (counts[v] || 0) + 1; });
@@ -89,7 +98,7 @@ const NHETE_SERVER_RULES_ = (function () {
     if (/^[\s]*[=+@-]/u.test(text) || /^[\t\r\n]/u.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   }
-  const api = {pilotDisabled, holds, coverageRegion, isRequired, screenVisible, normalizeChanges, words, has, relevant, valid, missing, noView, tally, office, csvCell};
+  const api = {normalizeAnswers, pilotDisabled, holds, coverageRegion, isRequired, screenVisible, normalizeChanges, words, has, relevant, valid, missing, noView, tally, office, csvCell};
   return api;
 })();
 // END EMBEDDED SERVER RULES
@@ -265,6 +274,7 @@ function moduleState_(owner, revisions, fragments, includeHistory) {
     if(includeHistory)state.history.push({version:Number(r.version),savedAt:String(r.savedAt),status:r.status,changes:revisionChanges});
     state.version = Number(r.version); state.status = r.status; state.savedAt = String(r.savedAt); state.screen = String(r.screen);
   });
+  state.answers=NHETE_SERVER_RULES_.normalizeAnswers(content_(),state.answers);
   return state;
 }
 function validateChanges_(changes) {
@@ -278,7 +288,7 @@ function validateChanges_(changes) {
       throw new Error(q.type === 'text' ? 'Please keep your answer to 1,500 words or fewer.' : 'Invalid answer.');
     }
     if (value === false && !['check','toggle'].includes(q.type) || Array.isArray(value) && q.type !== 'multi' || value === '' && ['check','toggle','multi'].includes(q.type)) throw new Error('Invalid answer type.');
-    cleaned[id] = value;
+    cleaned[id] = q.aliases && Object.prototype.hasOwnProperty.call(q.aliases,value) ? q.aliases[value] : value;
   });
   return cleaned;
 }
@@ -503,6 +513,7 @@ const NHETE_ANALYSIS_ = (function () {
     return typeof value === 'boolean' ? (value?'Yes':'No') : String(value);
   }
   function build(content, responses, rules, at) {
+    responses=responses.map(r=>({...r,answers:rules.normalizeAnswers(content,r.answers)}));
     const screens=Object.fromEntries(content.screens.map(s=>[s.id,s]));
     const indicators=Object.fromEntries(content.indicators.map(i=>[i.code,i]));
     const parents={};content.questions.forEach(q=>{if(q.extra)parents[q.extra]=q;if(q.comment)parents[q.comment]=q;});

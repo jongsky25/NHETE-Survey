@@ -19,7 +19,7 @@
     return node;
   }
   function ui(ref) { return content?.ui[ref]?.text || ref; }
-  function answers() { return {...data.response.answers,...dirty}; }
+  function answers() { return rules.normalizeAnswers(content,{...data.response.answers,...dirty}); }
   function currentScreen() { return content.screens[screenIndex]; }
   function status(text) { badge.textContent = text; }
   function notice(text, bringIntoView=false) {
