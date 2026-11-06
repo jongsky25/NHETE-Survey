@@ -135,3 +135,12 @@ Use Secretariat → Refresh analysis sheets after copying Code.gs and Client.htm
 Each detail row carries the question text, indicator/part or grid statement, respondent status and applicability. Summary counts use submitted, included responses only. Percentages include No view or opinion in the answered denominator and are descriptive rather than agreement decisions. Separate device entries are not deduplicated by email. Long answers are split into numbered parts without truncation; the wide matrix points to these detail rows. Formula-like user text is written as literal text.
 
 Verification includes source mapping, long answers, excluded/draft responses, conditional questions, server authorization, generated-tab ownership checks, journal preservation and browser-to-backend refresh using fabricated responses.
+
+## November 6 editor dropdown correction
+
+Underscore helper refreshAnalysis_ was absent from the user's Apps Script dropdown.
+The visible runAnalysisRefresh command verifies a nonempty active Google identity
+matching the effective identity before calling that helper. Code.gs and the manifest
+must be copied together; userinfo.email is added for this identity check. Anonymous
+and mismatched users are rejected; the authenticated Secretariat path is unchanged.
+Use runAnalysisRefresh in editor-facing instructions from now on.

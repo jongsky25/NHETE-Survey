@@ -450,6 +450,16 @@ function refreshAnalysis(token) {
   authenticate_(token,true);
   return refreshAnalysis_();
 }
+// Visible editor command. Never allow an anonymous execute-as-owner request
+// to use the deployment owner's spreadsheet permissions.
+function runAnalysisRefresh() {
+  const active=email_(Session.getActiveUser().getEmail());
+  const effective=email_(Session.getEffectiveUser().getEmail());
+  if(!active || active!==effective)throw new Error('Run runAnalysisRefresh from the Apps Script editor while signed in to the project owner account.');
+  const report=refreshAnalysis_();
+  console.log('Analysis sheets updated: '+report.url);
+  return report;
+}
 function refreshAnalysis_() {
   return locked_(() => {
     ensureModule_();
@@ -517,7 +527,7 @@ const NHETE_ANALYSIS_ = (function () {
     const identityHeaders=['Response ID','Name','Email','Agency','Response status','Review status'];
     const metaHeaders=['Question ID','Module section','Page','Indicator','Part or statement','Question asked','Question context'];
     const info=[['Item','Explanation'],['Updated at (UTC)',at],['Start here','Use Answers by Question to filter a question and see each respondent’s answer beside the actual question. Use Respondents for progress, Response Matrix for one row per response, and Choice Summary for counts.'],
-      ['Snapshot','These analysis tabs are a snapshot. After deploying the updated app, use Secretariat → Refresh analysis sheets (or run refreshAnalysis_ in Apps Script) to rebuild them from the latest saved responses.'],
+      ['Snapshot','These analysis tabs are a snapshot. After deploying the updated app, use Secretariat → Refresh analysis sheets (or run runAnalysisRefresh in Apps Script) to rebuild them from the latest saved responses.'],
       ['Summary population','Choice Summary uses submitted, included responses only. Draft and excluded entries remain visible in the detail tabs with explicit status.'],
       ['Percentages','Share of answered uses all applicable answered responses, including No view or opinion. Multi-select percentages may total more than 100%. This is a descriptive count, not a TWG decision or consensus score.'],
       ['Blank vs skipped','Not answered means an applicable question has no answer. Not applicable means conditional rules hide or disable the question. Prior inactive answers remain in the original journal.'],

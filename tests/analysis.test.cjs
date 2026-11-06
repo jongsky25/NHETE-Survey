@@ -52,3 +52,12 @@ test('coverage question wording uses the respondent’s regional or national sco
   assert(!label.includes('[region]'));assert(label.includes(index===0?'four pilot regions':option('0.4',index)));
  }
 });
+
+test('visible editor refresh rejects anonymous and mismatched identities',()=>{
+ const h=require('./backend-harness.cjs').harness();
+ const session=(active,effective)=>{h.ctx.Session={getActiveUser:()=>({getEmail:()=>active}),getEffectiveUser:()=>({getEmail:()=>effective})};};
+ session('', 'owner@example.test');assert.throws(()=>h.ctx.runAnalysisRefresh(),/project owner account/);
+ session('visitor@example.test','owner@example.test');assert.throws(()=>h.ctx.runAnalysisRefresh(),/project owner account/);
+ assert.equal(h.sheets['Analysis Guide'],undefined);
+ session('owner@example.test','owner@example.test');assert(h.ctx.runAnalysisRefresh().url.includes('existing'));
+});

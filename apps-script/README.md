@@ -26,4 +26,14 @@ GitHub publication does not deploy the Google app. Live deployment still needs t
 
 ## Readable response analysis
 
-Copy the latest **Code.gs and Client.html** and redeploy to add **Secretariat → Refresh analysis sheets**. The button rebuilds six analysis tabs in the existing workbook from the latest committed answers, including full question labels and indicator/part context. You can also run `refreshAnalysis_` in the script editor. Analysis tabs are snapshots; refresh before analysis. Draft and excluded entries are labeled in detail views; Choice Summary uses only submitted, included responses. Original storage tabs remain intact.
+Copy the latest **Code.gs and Client.html** and redeploy to add **Secretariat → Refresh analysis sheets**. The button rebuilds six analysis tabs in the existing workbook from the latest committed answers, including full question labels and indicator/part context. You can also run `runAnalysisRefresh` in the script editor. Analysis tabs are snapshots; refresh before analysis. Draft and excluded entries are labeled in detail views; Choice Summary uses only submitted, included responses. Original storage tabs remain intact.
+
+### Editor refresh command
+
+If the editor dropdown does not show underscore helpers, use `runAnalysisRefresh`.
+Copy the latest Code.gs and appsscript.json, save, then select that command and Run
+while signed in to the project owner account. Accept Google's authorization prompt
+if shown. The added userinfo.email scope lets the command verify the active Google
+identity; anonymous web callers cannot invoke it with the deployment owner's access.
+Running in the editor uses saved code immediately and does not require redeployment.
+The Secretariat button continues to use the existing authenticated refreshAnalysis API.
