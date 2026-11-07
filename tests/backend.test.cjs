@@ -13,3 +13,22 @@ test('public identity never grants admin and different devices remain separate',
 test('retry idempotency, stale-tab conflict, exclusion persists through participant edits',()=>{const h=harness(),e=h.enter(),request={device,expectedVersion:0,requestId:'retry-request-123',screen:'mx-A',changes:{'A01.q-k':'Yes, we keep it'}};const first=h.ctx.saveAnswers(e.token,request);assert.equal(h.ctx.saveAnswers(e.token,request).response.version,1);assert(h.save(e.token,0,{}).conflict);h.ctx.setEntryReview(h.admin,{owner:first.response.owner,included:false,reason:'Review reason'});h.save(e.token,1,{'A01.q-k':'No, we do not keep it'});assert.equal(h.ctx.adminData(h.admin).responses[0].review.included,false);});
 test('long answers chunk intact; closure respected; legacy sheets untouched',()=>{const h=harness(),e=h.enter();h.sheets.Revisions.appendRow(['old archive']);const archive=JSON.stringify(h.sheets.Revisions.values);const value=('x'.repeat(100)+' ').repeat(1500).trim();assert.equal(h.save(e.token,0,{'A01.q-o':value}).response.answers['A01.q-o'],value);assert.equal(h.ctx.bootstrap(e.token,device).response.answers['A01.q-o'],value);assert(h.sheets.Module20261102Changes.values.length>10);assert.equal(archive,JSON.stringify(h.sheets.Revisions.values));h.props.CONSULTATION_OPEN='false';assert.throws(()=>h.save(e.token,1,{}),/closed/);});
 test('previous loader reproduces the missing-content-type exception',()=>{const h=harness(),source=fs.readFileSync('apps-script/Content.gs','utf8');const old=source.replace(", 'application/x-gzip', 'nhete-module.json.gz'",'');assert.notEqual(old,source);assert.throws(()=>vm.runInNewContext(old,{Utilities:h.ctx.Utilities}),/Blob object must have non-null content type/);});
+
+test('server accepts excluded indicators without subsequent answers and preserves prior values',()=>{
+ const h=harness(),e=h.enter(),patch={};
+ for(const q of c.questions.filter(q=>q.screen==='mx-A' && q.id.endsWith('.q-v')))patch[q.id]=q.options[3].text;
+ patch['A01.q-k']='Yes, we keep it';patch['A01.q-o']='Earlier explanation';
+ const saved=h.save(e.token,0,patch,{validateScreen:'mx-A'});assert(saved.ok);
+ assert.equal(saved.response.answers['A01.q-o'],'Earlier explanation');
+ assert(h.save(e.token,1,{}, {validateScreen:'cp-A',screen:'mx-B'}).ok);
+});
+test('old agency selections resume and save under full names without rewriting history',()=>{
+ const h=harness(),e=h.enter(),old='DOH Health Facility Bureau',full='Department of Health — Health Facility Development Bureau (HFDB)';
+ assert.equal(h.save(e.token,0,{'0.1':old}).response.answers['0.1'],full);
+ const changes=h.sheets.Module20261102Changes.values;
+ changes.at(-1)[4]=JSON.stringify(JSON.stringify(old)); // simulate an existing pre-update journal
+ const snapshot=JSON.stringify(changes);
+ assert.equal(h.ctx.bootstrap(e.token,device).response.answers['0.1'],full);
+ const admin=h.ctx.adminData(h.admin).responses[0];assert.equal(admin.answers['0.1'],full);assert.equal(admin.history[0].changes['0.1'],old);
+ assert.equal(JSON.stringify(changes),snapshot);
+});

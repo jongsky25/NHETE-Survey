@@ -1,0 +1,5 @@
+CREATE TABLE live_records (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1
+);

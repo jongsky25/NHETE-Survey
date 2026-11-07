@@ -5,6 +5,8 @@ ROOT=Path(__file__).resolve().parents[1]
 source=json.loads((ROOT/'source/word-v20261103.json').read_text())
 base=json.loads(gzip.decompress((ROOT/'source/runtime-v20261102.json.gz').read_bytes()))
 rows={r['ref']:r for r in source['rows'] if r['ref']}
+agency_labels=json.loads((ROOT/'source/agency-labels.json').read_text())
+base['sourceTextAmendments'].update({ref:{'text':text,'reason':'User-requested full agency and bureau names, November 6'} for ref,text in agency_labels.items()})
 def row(ref):
  r={k:copy.deepcopy(rows[ref][k]) for k in ('ref','kind','text','paragraphs','images')}
  if ref in base['sourceTextAmendments']:
@@ -17,6 +19,8 @@ def refresh(v):
  if isinstance(v,list):return [refresh(x) for x in v]
  return v
 c=refresh(base)
+agency_question=next(q for q in c['questions'] if q['id']=='0.1')
+agency_question['aliases']={rows[ref]['text']:text for ref,text in agency_labels.items()}
 c['version']='v20261103';c['storageVersion']=base['version'];c['sourceSha256']=source['sha256']
 c['legacyScreenMap']={s['id']:'mx-'+s['id'][4] for s in base['screens'] if s['id'].startswith('ind-')}
 c['legacyScreenMap'].update({'s8-'+d+'0':'mx-'+d for d in 'ABCD'})
@@ -56,8 +60,12 @@ for domain in 'ABCD':
    q=question(prefix+'SG.1','QSG.1',cp['id'],**attrs)
    q.update(extra=prefix+'SG.1:extra',extraChoices=['QSG.1-c2'])
    textq(prefix+'SG.1:extra','D-mx.14',cp['id'],True,whenChoiceRefs={'question':q['id'],'refs':['QSG.1-c2']},**attrs)
-   question(prefix+'SG.2','QSG.2',cp['id'],when={'question':q['id'],'values':[row('QSG.1-c1')['text'],row('QSG.1-c2')['text']]},**attrs)
-   question(prefix+'SG.3','QSG.3',cp['id'],coverage=True,when={'question':q['id'],'values':[row('QSG.1-c1')['text'],row('QSG.1-c2')['text']]},alsoWhen={'question':prefix+'SG.2','values':[row('QSG.2-c'+str(n))['text'] for n in range(1,5)]},**attrs)
+   question(prefix+'SG.2','QSG.2',cp['id'],**attrs)
+   question(prefix+'SG.3','QSG.3',cp['id'],coverage=True,alsoWhen={'question':prefix+'SG.2','values':[row('QSG.2-c'+str(n))['text'] for n in range(1,4)]},**attrs)
+# Retain retired part-holder fields for old queued saves and historical exports.
+retired=[q for q in c['questions'] if q['id'].endswith((':SG.1',':SG.1:extra'))]
+c['legacyQuestions'].extend(retired)
+c['questions']=[q for q in c['questions'] if q not in retired]
 idx=next(i for i,s in enumerate(c['screens']) if s['id']=='s8-RF');c['screens'][idx:idx]=new
 for stop in c['stops']:stop['screens']=[s['id'] for s in c['screens'] if s['stop']==stop['id']]
 # Use the actual attached diagrams, including their binary bytes, not the old image cache.

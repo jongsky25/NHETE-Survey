@@ -332,4 +332,44 @@ figure { margin: 24px 0; }
 }
 .short-select::after { content: '▾'; position: absolute; right: 10px; top: 12px; color: var(--ink); pointer-events: none; }
 
+/* Fit the questionnaire to the window and let the page own scrolling. */
+.shell, .module-screen { max-width: none; }
+.shell { padding-left: clamp(12px, 2vw, 32px); padding-right: clamp(12px, 2vw, 32px); }
+.module-screen { padding: clamp(16px, 2vw, 32px); }
+.module-screen .table-wrap { overflow: visible; max-height: none; }
+.module-screen table { min-width: 0; table-layout: fixed; }
+.module-screen th, .module-screen td { min-width: 0; overflow-wrap: anywhere; position: static; }
+.indicator-matrix thead th:first-child { width: 6%; }
+.indicator-matrix thead th:nth-child(2) { width: 29%; }
+.parts-matrix thead th:first-child { width: 14%; }
+.parts-matrix thead th:nth-child(2) { width: 30%; }
+/* Split the remaining width equally across response columns. */
+@media (min-width: 900px) {
+  .indicator-matrix thead th:nth-child(n+3) { width: 13%; }
+  .parts-matrix thead th:nth-child(n+3) { width: 28%; }
+  .parts-matrix thead th:nth-child(3):last-child { width: 56%; }
+}
+.matrix-wrap .matrix-code { position: static; width: auto; }
+.response-grid th:first-child { width: 16%; }
+.response-grid th:nth-child(2) { width: 28%; }
+.response-grid th:last-child { width: 22%; }
+.choice-picker { margin: 0; padding: 0; border-radius: 8px; font: inherit; min-width: 0; }
+.choice-picker summary { padding: 10px; min-height: 48px; font-weight: 400; overflow-wrap: anywhere; }
+.choice-options { padding: 6px; }
+.choice-option { display: flex; align-items: flex-start; gap: 6px; padding: 10px 4px; border-top: 1px solid var(--line); cursor: pointer; white-space: normal; overflow-wrap: anywhere; }
+.choice-option input { flex: 0 0 auto; margin-top: 5px; }
+.choice-option span { min-width: 0; }
+.choice-option:focus-within { outline: 2px solid var(--focus); }
+@media (max-width: 899px) {
+  .response-grid, .response-grid tbody, .response-grid tr, .response-grid th, .response-grid td { display: block; width: 100%; }
+  .response-grid thead { display: none; }
+  .response-grid tr { border: 1px solid var(--line); border-radius: 12px; margin-bottom: 20px; padding: 12px; }
+  .response-grid td[data-choice] { display: flex; align-items: center; gap: 10px; }
+  .response-grid td[data-choice]::before { content: attr(data-choice); flex: 1; }
+  .response-grid th:first-child { width: 100%; }
+}
+
+.pilot-disabled { opacity: .5; }
+.pilot-disabled .choice-picker, .pilot-disabled textarea { background: var(--soft); cursor: not-allowed; }
+
 </style>

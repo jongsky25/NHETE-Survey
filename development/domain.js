@@ -7,7 +7,11 @@
     const v = answers[condition.question];
     return Array.isArray(v) ? v.some(x => condition.values.includes(x)) : condition.values.includes(v);
   }
+  function pilotDisabled(code, answers) {
+    return /^(?:Defer|Drop|No view or opinion)(?:\.|$)/u.test(answers[code+'.q-v'] || '');
+  }
   function relevant(q, answers, content) {
+    if (q.indicator && q.id !== q.indicator+'.q-v' && pilotDisabled(q.indicator, answers)) return false;
     if (q.holder && !holds(answers[q.holder])) return false;
     if (q.coverage && !coverageRegion(answers,content)) return false;
     if (q.unless && answers[q.unless] === true) return false;
@@ -28,7 +32,7 @@
   }
   function isRequired(q, answers) { return q.required || !!q.requiredAny?.some(c=>matches(c,answers)); }
   function screenVisible(screen, answers, content) {
-    return !screen.id.startsWith('cp-') || content.indicators.some(i=>i.partsScreen===screen.id && holds(answers[i.code+'.q-k']));
+    return !screen.id.startsWith('cp-') || content.indicators.some(i=>i.partsScreen===screen.id && !pilotDisabled(i.code, answers) && holds(answers[i.code+'.q-k']));
   }
   function normalizeChanges(content, before, patch) {
     const changes={...patch}, next={...before,...patch};
@@ -50,7 +54,16 @@
     });
     return changes;
   }
+  function normalizeAnswers(content, answers) {
+    const normalized={...answers};
+    content.questions.filter(q=>q.aliases).forEach(q=>{
+      const value=answers[q.id];
+      if(typeof value==='string' && Object.prototype.hasOwnProperty.call(q.aliases,value))normalized[q.id]=q.aliases[value];
+    });
+    return normalized;
+  }
   function valid(q, value) {
+    if(q.aliases && Object.prototype.hasOwnProperty.call(q.aliases,value))value=q.aliases[value];
     if (!has(value)) return !q.required;
     if (q.type === 'text') return typeof value === 'string' && (!q.required || !!value.trim()) && words(value) <= 1500;
     if (q.type === 'check' || q.type === 'toggle') return typeof value === 'boolean';
@@ -67,7 +80,7 @@
   function tally(q, responses, content) {
     const counts = {}; let n = 0;
     responses.filter(p => p.status === 'submitted' && p.review?.included !== false).forEach(p => {
-      const value = p.answers[q.id];
+      const value = normalizeAnswers(content,p.answers)[q.id];
       if (!relevant(q, p.answers, content) || !has(value) || noView(value) || Array.isArray(value) && value.some(noView)) return;
       n++;
       (Array.isArray(value) ? value : [String(value)]).forEach(v => { counts[v] = (counts[v] || 0) + 1; });
@@ -85,7 +98,7 @@
     if (/^[\s]*[=+@-]/u.test(text) || /^[\t\r\n]/u.test(text)) text = "'" + text;
     return '"' + text.replace(/"/g, '""') + '"';
   }
-  const api = {holds, coverageRegion, isRequired, screenVisible, normalizeChanges, words, has, relevant, valid, missing, noView, tally, office, csvCell};
+  const api = {normalizeAnswers, pilotDisabled, holds, coverageRegion, isRequired, screenVisible, normalizeChanges, words, has, relevant, valid, missing, noView, tally, office, csvCell};
   root.NheteRules = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

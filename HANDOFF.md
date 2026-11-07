@@ -107,3 +107,60 @@ The user prefers short practical instructions and direct browser-accessible GitH
 ## November 4 loader correction
 
 The live Google app reported “Blob object must have non-null content type” in Content.gs. The generated loader now explicitly supplies application/x-gzip and a .gz filename to Utilities.newBlob before Utilities.ungzip. The mock now enforces this requirement, and a regression check reproduces the previous error. Only Content.gs needs to be copied and redeployed for this correction; module content and stored responses are unchanged. Live confirmation of the corrected deployment remains pending.
+
+## November 5 layout and questionnaire revision
+
+This revision supersedes the earlier scrolling, native dropdown, SG.1 and glossary behavior above.
+
+- Participant pages fill the available window width. Tables grow with the page; there are no nested table scroll areas. Narrow screens show labeled rows.
+- Matrix choices use keyboard-accessible disclosure panels with radio choices that wrap inside their cells. Full option wording and stored values are unchanged.
+- Parts are filtered by the indicator holder answer. SG.1 and its extra description are retired from the active questionnaire and retained in the legacy schema. SG.2 is required immediately for every displayed part. Coverage applies at household/person, purok/sitio/zone or barangay level only, within the existing regional scope. Inapplicable cells say “This question is only applicable for datasets that can produce barangay-level data”. There are now 415 active fields.
+- Terminology links appear once per page, outside headings and titles. Source paragraphs explaining a term suppress its links for that page. Indicator code definitions remain repeatable outside headings. The editorial source-reference map in applyGlossaryRules covers explanatory paragraphs that do not use a simple definition sentence.
+- Storage version, response sheets and historical values are unchanged.
+
+Copy Client.html, Styles.html and Content.gs together into the existing Apps Script project and deploy a new version. Code.gs is unchanged in this revision. GitHub publication does not update the live Google app.
+
+### Follow-up: pilot choices disable the rest of each indicator row
+
+Defer, Drop and No view or opinion disable cut-off, worry, holder and comment controls. Shared client/server relevance rules also omit those answers from validation and tallies, and exclude the indicator from parts screens and custodian summaries. Previously entered answers are preserved and become available again if the participant selects Include, Compare or Test only. A blank pilot answer retains the previous behavior.
+
+This follow-up also changes **Code.gs** (embedded server rules) and optional Rules.gs. For the complete revision, replace **Code.gs, Client.html, Styles.html and Content.gs** together and deploy a new Apps Script version. The earlier three-file instruction applies only to the layout-only commit.
+
+## Analysis views
+
+`development/analysis.js` projects the committed response journal into six readable tabs: Analysis Guide, Respondents, Answers by Question, Choice Summary, Question Guide and Response Matrix. It is embedded in Code.gs by the runtime builder. No participant data belongs in this repository.
+
+Use Secretariat → Refresh analysis sheets after copying Code.gs and Client.html into the existing deployment, or run the private `refreshAnalysis_` function from the script editor. Reports are snapshots, not automatically refreshed. The browser entry point authenticates a secretariat administrator. The writer only replaces tabs with the generated-report marker in A1's note; other tabs and response history stay intact. Keep analyst annotations on separate tabs.
+
+Each detail row carries the question text, indicator/part or grid statement, respondent status and applicability. Summary counts use submitted, included responses only. Percentages include No view or opinion in the answered denominator and are descriptive rather than agreement decisions. Separate device entries are not deduplicated by email. Long answers are split into numbered parts without truncation; the wide matrix points to these detail rows. Formula-like user text is written as literal text.
+
+Verification includes source mapping, long answers, excluded/draft responses, conditional questions, server authorization, generated-tab ownership checks, journal preservation and browser-to-backend refresh using fabricated responses.
+
+## November 6 editor dropdown correction
+
+Underscore helper refreshAnalysis_ was absent from the user's Apps Script dropdown.
+The visible runAnalysisRefresh command verifies a nonempty active Google identity
+matching the effective identity before calling that helper. Code.gs and the manifest
+must be copied together; userinfo.email is added for this identity check. Anonymous
+and mismatched users are rejected; the authenticated Secretariat path is unchanged.
+Use runAnalysisRefresh in editor-facing instructions from now on.
+
+## November 6 full agency labels
+
+All 19 office choices were reviewed. Twelve labels now use expanded department,
+bureau, agency or team names; full names already present and broad sector choices
+remain unchanged. HFDB is Health Facility Development Bureau; HPDPB is Health Policy
+Development and Planning Bureau. Grouped categories remain grouped.
+
+The approved amendments are in source/agency-labels.json. Existing option references,
+choice order and storageVersion are preserved. Q0.1 aliases normalize legacy labels
+for resume, pending saves and analytical output, while historical journal entries and
+self-reported free-text profile agencies remain unchanged. Copy Code.gs, Client.html
+and Content.gs together, redeploy, then run runAnalysisRefresh to update report labels.
+Styles.html and the latest manifest need no further change for this revision.
+
+Name verification references: [2026 government directory](https://www.dbm.gov.ph/wp-content/uploads/AboutDBM/2026-Government-Directory.pdf),
+[PPP Center DOH bureau list](https://ppp.gov.ph/press_releases/ppp-introductory-course-conducted-for-doh-central-office/),
+[NAMRIA](https://www.namria.gov.ph/), [PHIVOLCS](https://www.phivolcs.dost.gov.ph/about-phivolcs/),
+[PAGASA](https://www.pagasa.dost.gov.ph/mandate-and-functions), and
+[PhilHealth](https://www.philhealth.gov.ph/news/up/article/2026/news_697c3fea7b458.php).
