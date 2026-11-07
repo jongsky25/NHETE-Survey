@@ -1,5 +1,9 @@
 # NHETE Consultation Room
 
+For participant self-entry, shared live results and facilitator decisions, see
+[the live platform and pre-work setup guide](live/README.md). The instructions
+below describe the separate offline facilitator tool.
+
 A separate facilitator tool for face-to-face consultation. Open `dist/index.html`
 in Chrome or Edge, or use the privately hosted copy. The HTML is self-contained:
 no internet connection or Apps Script deployment is needed for offline use.

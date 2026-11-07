@@ -8,7 +8,9 @@
     "test": "python tools/audit_word.py && node --test tests/backend.test.cjs tests/rules.test.cjs tests/analysis.test.cjs",
     "test:browser": "node tests/browser.cjs && node tests/integration.cjs",
     "build:consultation": "python tools/build_consultation.py",
-    "test:consultation": "npm run build:consultation && node tests/consultation.test.cjs"
+    "test:consultation": "npm run build:consultation && node tests/consultation.test.cjs",
+    "build:live": "python consultation/live/build.py",
+    "test:live": "npm run build:live && node --test tests/live.test.mjs tests/consultation-bridge.test.cjs && node tests/live-ui.test.cjs"
   },
   "devDependencies": {
     "acorn": "^8.15.0",
